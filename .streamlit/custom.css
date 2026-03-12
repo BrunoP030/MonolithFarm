@@ -1,0 +1,417 @@
+:root {
+  --bg: #f6f0e4;
+  --surface: rgba(255, 250, 243, 0.92);
+  --surface-strong: #fffaf2;
+  --ink: #203126;
+  --muted: #607164;
+  --line: rgba(32, 49, 38, 0.12);
+  --forest: #2f6f4f;
+  --olive: #6d8453;
+  --amber: #c46b2a;
+  --stone: #7f867f;
+  --shadow: 0 24px 60px rgba(51, 53, 38, 0.12);
+}
+
+.stApp {
+  background:
+    radial-gradient(circle at top left, rgba(196, 107, 42, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(47, 111, 79, 0.16), transparent 30%),
+    linear-gradient(180deg, #fbf6ec 0%, var(--bg) 46%, #efe6d7 100%);
+  color: var(--ink);
+  font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+}
+
+[data-testid="stHeader"] {
+  background: transparent;
+}
+
+.block-container {
+  padding-top: 2rem;
+  padding-bottom: 3rem;
+  max-width: 1380px;
+}
+
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, rgba(255, 251, 244, 0.96) 0%, rgba(240, 230, 214, 0.96) 100%);
+  border-right: 1px solid var(--line);
+}
+
+[data-testid="stSidebar"] .block-container {
+  padding-top: 1.6rem;
+}
+
+.sidebar-title {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+  margin-bottom: 0.45rem;
+}
+
+.sidebar-copy {
+  color: var(--muted);
+  font-size: 0.96rem;
+  line-height: 1.5;
+  margin-bottom: 1.1rem;
+}
+
+.sidebar-subtitle {
+  margin-top: 1rem;
+  margin-bottom: 0.45rem;
+  color: var(--forest);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+.sidebar-note {
+  margin-top: 0.85rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(32, 49, 38, 0.08);
+  border-radius: 18px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  color: var(--ink);
+}
+
+.hero-shell {
+  padding: 2rem 2rem 1.8rem 2rem;
+  border-radius: 30px;
+  background: linear-gradient(145deg, rgba(255, 249, 239, 0.95) 0%, rgba(238, 230, 217, 0.94) 100%);
+  border: 1px solid rgba(32, 49, 38, 0.09);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.4rem;
+}
+
+.hero-kicker {
+  color: var(--forest);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.hero-shell h1 {
+  margin: 0;
+  font-size: 3rem;
+  line-height: 0.98;
+  max-width: 12ch;
+}
+
+.hero-shell p {
+  margin: 0.85rem 0 0;
+  max-width: 64ch;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-top: 1.4rem;
+}
+
+.hero-chip {
+  padding: 1rem 1rem 0.95rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(32, 49, 38, 0.08);
+}
+
+.hero-chip span {
+  display: block;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.hero-chip strong {
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.section-title {
+  margin: 1.15rem 0 0.85rem;
+}
+
+.section-title h2 {
+  margin: 0;
+  font-size: 1.85rem;
+  line-height: 1.05;
+}
+
+.section-title p {
+  margin: 0.32rem 0 0;
+  color: var(--muted);
+  max-width: 66ch;
+  line-height: 1.55;
+}
+
+.metric-card,
+.insight-card,
+.duel-card,
+.section-panel,
+.evidence-card {
+  border-radius: 24px;
+  border: 1px solid rgba(32, 49, 38, 0.08);
+  box-shadow: var(--shadow);
+}
+
+.metric-card {
+  min-height: 148px;
+  padding: 1.1rem 1.15rem 1rem;
+  margin-bottom: 0.6rem;
+  color: #fff;
+}
+
+.metric-card.forest {
+  background: linear-gradient(135deg, #2f6f4f 0%, #224f39 100%);
+}
+
+.metric-card.olive {
+  background: linear-gradient(135deg, #728a57 0%, #5d7344 100%);
+}
+
+.metric-card.amber {
+  background: linear-gradient(135deg, #cf7d31 0%, #aa5f20 100%);
+}
+
+.metric-card.stone {
+  background: linear-gradient(135deg, #80897e 0%, #676e67 100%);
+}
+
+.metric-label {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  opacity: 0.82;
+  margin-bottom: 0.55rem;
+}
+
+.metric-value {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.metric-detail {
+  margin-top: 0.6rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  opacity: 0.88;
+}
+
+.insight-card {
+  padding: 1rem 1.1rem;
+  background: rgba(255, 250, 243, 0.92);
+  margin-bottom: 0.6rem;
+}
+
+.insight-label {
+  font-size: 0.76rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--forest);
+  margin-bottom: 0.45rem;
+  font-weight: 700;
+}
+
+.insight-headline {
+  font-size: 1.02rem;
+  color: var(--ink);
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.duel-card {
+  padding: 1rem 1.1rem;
+  background: linear-gradient(145deg, rgba(255, 250, 243, 0.94) 0%, rgba(244, 236, 224, 0.94) 100%);
+  margin-bottom: 0.9rem;
+}
+
+.duel-kicker {
+  font-size: 0.74rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--forest);
+  margin-bottom: 0.42rem;
+  font-weight: 700;
+}
+
+.duel-card h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.35rem;
+}
+
+.duel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.duel-stat {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(32, 49, 38, 0.06);
+  border-radius: 16px;
+  padding: 0.75rem 0.8rem;
+}
+
+.duel-stat span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.22rem;
+}
+
+.duel-stat strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.section-panel {
+  padding: 1rem 1.1rem;
+  background: rgba(255, 250, 243, 0.92);
+  margin-bottom: 1rem;
+}
+
+.panel-title {
+  font-size: 0.78rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--forest);
+  margin-bottom: 0.45rem;
+  font-weight: 700;
+}
+
+.panel-body {
+  color: var(--ink);
+  line-height: 1.65;
+}
+
+.evidence-card {
+  padding: 1.15rem 1.2rem 1rem;
+  background: rgba(255, 250, 243, 0.95);
+  margin-bottom: 0.9rem;
+}
+
+.evidence-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+
+.evidence-top h3 {
+  margin: 0;
+  font-size: 1.45rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.38rem 0.8rem;
+  background: rgba(47, 111, 79, 0.12);
+  color: var(--forest);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.evidence-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.evidence-metric {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 18px;
+  padding: 0.8rem 0.85rem;
+  border: 1px solid rgba(32, 49, 38, 0.06);
+}
+
+.evidence-metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.28rem;
+}
+
+.evidence-metric strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+  gap: 0.55rem;
+  padding: 0.2rem 0 0.8rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+  padding: 0.72rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(32, 49, 38, 0.08);
+  background: rgba(255, 250, 243, 0.8);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.stTabs [aria-selected="true"] {
+  background: linear-gradient(135deg, rgba(47, 111, 79, 0.16) 0%, rgba(109, 132, 83, 0.16) 100%);
+  color: var(--ink);
+}
+
+.stButton > button {
+  border-radius: 999px;
+  border: 1px solid rgba(32, 49, 38, 0.08);
+  background: linear-gradient(135deg, #2f6f4f 0%, #24553b 100%);
+  color: white;
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+}
+
+.stTextInput > div > div > input,
+.stFileUploader > div,
+.stSelectbox > div > div,
+.stSlider,
+.stDataFrame,
+.stAlert {
+  border-radius: 20px !important;
+}
+
+@media (max-width: 960px) {
+  .hero-grid,
+  .evidence-grid,
+  .duel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-shell h1 {
+    font-size: 2.3rem;
+  }
+}
