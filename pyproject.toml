@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "monolithfarm"
+version = "0.1.0"
+description = "MVP analitico para comparar areas de milho com foco em NDVI."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb>=1.2,<2.0",
+  "pandas>=2.2,<3.0",
+  "plotly>=6.0,<7.0",
+  "pyproj>=3.7,<4.0",
+  "shapely>=2.0,<3.0",
+  "streamlit>=1.45,<2.0",
+]
+
+[project.scripts]
+monolithfarm-ingest = "farmlab.database:main"
+
+[tool.setuptools.packages.find]
+include = ["farmlab*"]
