@@ -1,120 +1,146 @@
 # MonolithFarm
 
-Plataforma analítica para comparação entre áreas de milho com manejo convencional e áreas acompanhadas por tecnologias 4.0, com foco em NDVI, produtividade, clima, pragas e contexto operacional.
+Plataforma analitica para comparacao entre areas de milho com manejo convencional e areas acompanhadas por tecnologias 4.0, com foco em NDVI, produtividade, clima, pragas e contexto operacional.
 
 ## Resumo
 
-O presente projeto propõe a construção de um MVP analítico capaz de integrar diferentes fontes de dados agrícolas para apoiar a interpretação do desempenho de duas áreas de cultivo de milho. A solução reúne informações de sensoriamento remoto, monitoramento de pragas, clima, análise de solo e operações de campo, com o objetivo de oferecer uma leitura técnica mais clara sobre diferenças de vigor vegetativo e produtividade.
+Este repositorio materializa um MVP de ciencia de dados agricola para responder uma pergunta central:
 
-Em contexto acadêmico, o sistema foi concebido como uma base aplicada para investigação, comparação e argumentação. Sua principal finalidade é apoiar a discussão sobre o comportamento de áreas convencionais e áreas com tecnologia 4.0, especialmente a partir do uso do índice NDVI como eixo central da análise.
+- por que uma area apresentou melhor desempenho agronomico e produtivo do que outra na mesma safra?
 
-## Objetivo Geral
+O projeto integra fontes heterogeneas (satelite, operacao, clima, solo e pragas), persiste em banco local DuckDB e disponibiliza leitura visual em Streamlit.
 
-Desenvolver uma plataforma visual e analítica capaz de consolidar dados agrícolas heterogêneos e sustentar, de forma técnica, a comparação entre áreas de milho com manejo convencional e áreas acompanhadas por tecnologias 4.0.
+## Objetivo do Projeto
 
-## Objetivos Específicos
+Comparar, com base tecnica, areas de milho:
 
-- organizar, tratar e persistir os dados disponibilizados no pacote `FarmLab`;
-- relacionar informações de NDVI, produtividade, clima, solo, armadilhas e operações de campo;
-- permitir a visualização comparativa entre recortes monitorados;
-- apoiar a formulação de hipóteses sobre variações de desenvolvimento vegetativo e desempenho produtivo;
-- preparar uma base consistente para discussão de eficiência operacional e, futuramente, eficiência econômica.
+- manejo convencional;
+- manejo apoiado por tecnologias 4.0.
 
-## Escopo Atual da Solução
+O objetivo final e sustentar explicacoes sobre vigor vegetativo, produtividade e eficiencia operacional, preparando o caminho para comparacao economica (custo por hectare e retorno).
 
-No estágio atual, o projeto:
+## Arquitetura da Solucao
 
-- lê automaticamente o conjunto de dados `FarmLab`;
-- consolida informações de NDVI, solo, clima, armadilhas e camadas operacionais;
-- materializa os dados tratados em um banco local `DuckDB`;
-- disponibiliza um painel visual em `Streamlit`;
-- sugere um vínculo inicial entre recortes de NDVI e áreas monitoradas;
-- aceita arquivos auxiliares para mapeamento manual das áreas e custos por hectare.
+O sistema esta organizado em quatro camadas:
 
-## Estrutura da Solução
+1. ingestao: descoberta e leitura automatica dos arquivos do pacote `FarmLab`;
+2. tratamento: normalizacao, conversoes de tipos e enriquecimentos;
+3. persistencia: materializacao em `DuckDB`;
+4. visualizacao: painel analitico em `Streamlit`.
 
-O sistema está organizado em quatro camadas principais:
+Fluxo tecnico principal:
 
-- ingestão: descoberta e leitura automática dos arquivos brutos;
-- tratamento: normalização e preparação dos dados;
-- persistência: materialização em banco local `DuckDB`;
-- visualização: painel analítico construído em `Streamlit`.
+- [farmlab/io.py](farmlab/io.py)
+- [farmlab/analysis.py](farmlab/analysis.py)
+- [farmlab/database.py](farmlab/database.py)
+- [streamlit_app.py](streamlit_app.py)
 
-## Tecnologias Utilizadas
+## Mapeamento do Ecossistema FarmLab
 
-- `Python`
-- `Streamlit`
-- `DuckDB`
-- `Pandas`
-- `Plotly`
-- `Shapely`
-- `PyProj`
+Documentacao oficial consultada:
+
+- <https://farm.labs.unimar.br>
+- <https://farm.labs.unimar.br/docs/dados/miip>
+- <https://farm.labs.unimar.br/docs/guias/geotiff>
+- <https://farm.labs.unimar.br/docs/guias/shapefile>
+
+Categorias de dados descritas no portal:
+
+- `satelite` (OneSoil): recortes NDVI e metadados estatisticos;
+- `meteorologia` (Metos): serie horaria;
+- `solo` (Cropman): pontos, zonas e recomendacoes;
+- `ekos_camadas`: operacoes geoespaciais de campo;
+- `ekos_cadastros`: talhoes, maquinas, operadores e implementos;
+- `ekos_ordens`: ordens de servico e regras de alerta;
+- `ekos_paradas`: motivos de parada e atividades;
+- `miip`: catalogo de pragas e eventos de armadilhas.
+
+## Escopo Atual no Repositorio
+
+No estado atual, o app ja processa bem:
+
+- NDVI metadata + imagens;
+- clima horario;
+- armadilhas (lista e leituras consolidadas);
+- camadas operacionais de plantio e colheita;
+- sugestao de vinculacao entre recortes NDVI e areas.
+
+Pontos ainda pendentes para "fluxo completo" do portal:
+
+- ingestao integral de `miip` (incluindo `traps_events` com maior profundidade analitica);
+- ingestao de `ekos_cadastros`, `ekos_ordens` e `ekos_paradas`;
+- ampliacao para todas as camadas EKOS descritas no portal;
+- camada economica robusta (custos por hectare/operacao) para prova de eficiencia financeira.
 
 ## Dados Esperados
 
-Por padrão, o projeto procura os dados no diretório:
+O projeto resolve o diretorio de dados nesta ordem:
 
-```text
-C:\Users\Morgado\Downloads\FarmLab
-```
+1. variavel de ambiente `MONOLITHFARM_DATA_DIR`;
+2. pasta local `./FarmLab` (raiz do repositorio);
+3. fallback legado `C:\Users\Morgado\Downloads\FarmLab`.
 
-Caso o pacote esteja em outro local, o caminho pode ser informado manualmente no script de inicialização ou na própria interface.
+## Execucao Rapida
 
-## Execução
-
-O guia detalhado de execução está disponível em:
-
-- [COMO_EXECUTAR.md](docs/COMO_EXECUTAR.md)
-- [PRIMEIRO_USO_FACULDADE.md](docs/PRIMEIRO_USO_FACULDADE.md)
-
-Para uma execução rápida após baixar o repositório:
+### Windows
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh
 ```
 
-Depois disso, o painel poderá ser acessado em:
+### Linux/macOS
+
+```bash
+REFRESH=1 ./scripts/start_dashboard.sh
+```
+
+Depois, acessar:
 
 ```text
 http://127.0.0.1:8501
 ```
 
-Se a porta `8501` estiver ocupada:
+Se a porta estiver ocupada:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh -Port 8502
 ```
 
-## Estrutura Principal do Repositório
+```bash
+REFRESH=1 ./scripts/start_dashboard.sh "" "storage/monolithfarm.duckdb" 8502
+```
+
+## Guias de Execucao
+
+- [docs/COMO_EXECUTAR.md](docs/COMO_EXECUTAR.md)
+- [docs/PRIMEIRO_USO_FACULDADE.md](docs/PRIMEIRO_USO_FACULDADE.md)
+
+## Estrutura Principal do Repositorio
 
 - [streamlit_app.py](streamlit_app.py): interface principal do painel
-- [farmlab/analysis.py](farmlab/analysis.py): regras analíticas e síntese dos dados
-- [farmlab/database.py](farmlab/database.py): persistência e leitura do banco local
-- [farmlab/io.py](farmlab/io.py): descoberta e ingestão dos arquivos brutos
-- [scripts/start_dashboard.ps1](scripts/start_dashboard.ps1): inicialização assistida do projeto
+- [farmlab/analysis.py](farmlab/analysis.py): regras analiticas e sintese dos dados
+- [farmlab/database.py](farmlab/database.py): persistencia e leitura do banco local
+- [farmlab/io.py](farmlab/io.py): descoberta e ingestao dos arquivos brutos
+- [scripts/start_dashboard.ps1](scripts/start_dashboard.ps1): inicializacao assistida (Windows)
+- [scripts/start_dashboard.sh](scripts/start_dashboard.sh): inicializacao assistida (Linux/macOS)
 
 ## Arquivos Auxiliares
 
-- [season_mapping.example.csv](templates/season_mapping.example.csv)
-- [costs.example.csv](templates/costs.example.csv)
+- [templates/season_mapping.example.csv](templates/season_mapping.example.csv)
+- [templates/costs.example.csv](templates/costs.example.csv)
 
-## Limitações Atuais
+## Limitacoes Atuais
 
-Apesar de já oferecer uma base consistente para exploração e comparação, o projeto ainda apresenta limitações importantes:
+- recortes NDVI sem identificacao oficial de talhao no arquivo fonte;
+- pacote atual com JPG + metadados, sem TIFF numerico original no repositorio;
+- solo sem chave espacial direta para cada talhao no pipeline atual;
+- estacao meteorologica representa contexto macro da fazenda;
+- comparacao economica depende de custos externos fornecidos pelo usuario.
 
-- os recortes de NDVI não trazem o nome oficial do talhão;
-- o pacote atual contém imagens JPG e metadados, mas não os TIFFs numéricos originais;
-- a análise de solo não possui coordenadas ou chave direta de talhão;
-- a estação meteorológica representa o contexto geral da fazenda, e não a variabilidade local fina;
-- a análise econômica depende do fornecimento de planilhas complementares de custo.
+## Proximos Passos Recomendados
 
-## Continuidade do Trabalho
-
-Como evolução natural, o projeto poderá incorporar:
-
-- mapeamento oficial entre recortes de NDVI e talhões;
-- inclusão estruturada de custos por hectare e por operação;
-- comparação econômica direta entre manejo convencional e tecnologia 4.0;
-- ampliação do módulo analítico para modelos estatísticos e de aprendizado de máquina.
-
-Dessa forma, o repositório se posiciona como uma base acadêmica aplicada, com potencial de expansão para análises mais robustas e apresentações técnicas mais completas.
+1. integrar todas as tabelas EKOS e MIIP descritas na documentacao oficial;
+2. padronizar joins por `Service Order`, `field`, `trap`, `data/hora`;
+3. consolidar feature store por area e janela temporal;
+4. aplicar modelagem explicativa/preditiva para causalidade tecnica;
+5. fechar comparacao economica com custo por hectare e retorno produtivo.

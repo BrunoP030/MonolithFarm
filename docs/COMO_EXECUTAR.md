@@ -1,114 +1,138 @@
 # Como Executar o Projeto
 
-Este guia reúne o passo a passo necessário para rodar o projeto após baixar o repositório.
+Guia objetivo para subir o MonolithFarm com banco local DuckDB e dashboard Streamlit.
 
-Para uma conferência mais direta de ambiente em outra máquina:
+## Pre-requisitos
 
-- [PRIMEIRO_USO_FACULDADE.md](PRIMEIRO_USO_FACULDADE.md)
+- Python `3.11+`;
+- pacote de dados `FarmLab` disponivel localmente;
+- terminal:
+  - Windows: PowerShell;
+  - Linux/macOS: Bash.
 
-## Pré-requisitos
+Opcional (recomendado): `uv` para ambientes onde `pip` nao estiver disponivel no venv.
 
-Antes da execução, é necessário ter:
+## Resolucao do Diretorio de Dados
 
-- `Python 3.11` instalado e disponível no terminal;
-- acesso ao pacote de dados `FarmLab`;
-- PowerShell habilitado para execução local.
+O projeto busca os dados nesta ordem:
 
-## Estrutura esperada dos dados
+1. `MONOLITHFARM_DATA_DIR`;
+2. `./FarmLab`;
+3. `C:\Users\Morgado\Downloads\FarmLab` (fallback legado).
 
-Por padrão, o projeto procura os dados no caminho:
+## Execucao Rapida
 
-```text
-C:\Users\Morgado\Downloads\FarmLab
-```
-
-Se o diretório estiver em outro local, o caminho poderá ser informado manualmente no comando de execução.
-
-## Execução rápida
-
-Após clonar ou baixar o repositório, abrir um terminal dentro da pasta do projeto e executar:
+### Windows
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh
 ```
 
-Esse comando realiza as seguintes etapas:
+### Linux/macOS
 
-1. cria o ambiente virtual `.venv`, caso ainda não exista;
-2. instala as dependências do projeto;
-3. atualiza o banco local `DuckDB`;
-4. inicia o painel `Streamlit`.
+```bash
+REFRESH=1 ./scripts/start_dashboard.sh
+```
 
-Depois disso, o painel pode ser acessado em:
+Apos iniciar:
 
 ```text
 http://127.0.0.1:8501
 ```
 
-## Execução rápida com diretório de dados personalizado
+## Executar em Porta Diferente
 
-Se os dados não estiverem no caminho padrão:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh -DataDir "D:\Dados\FarmLab"
-```
-
-## Execução rápida em outra porta
-
-Se a porta `8501` estiver ocupada:
+### Windows
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh -Port 8502
 ```
 
-Nesse caso, o acesso será feito por:
+### Linux/macOS
 
-```text
-http://127.0.0.1:8502
+```bash
+REFRESH=1 ./scripts/start_dashboard.sh "" "storage/monolithfarm.duckdb" 8502
 ```
 
-## Execução manual
+## Diretorio de Dados Personalizado
 
-Caso seja necessário executar o projeto manualmente, o fluxo é o seguinte:
-
-1. criar o ambiente virtual:
+### Windows
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh -DataDir "D:\Dados\FarmLab"
+```
+
+### Linux/macOS
+
+```bash
+REFRESH=1 ./scripts/start_dashboard.sh "/caminho/FarmLab"
+```
+
+## Fluxo Manual (quando necessario)
+
+1. criar ambiente virtual:
+
+```bash
 python -m venv .venv
 ```
 
-2. ativar o ambiente:
+2. instalar projeto:
 
-```powershell
-.\.venv\Scripts\Activate.ps1
+```bash
+.venv/bin/python -m pip install -e .
 ```
 
-3. instalar o projeto:
+3. fallback sem `pip`:
 
-```powershell
-pip install -e .
+```bash
+uv pip install --python .venv/bin/python -e .
 ```
 
-4. materializar o banco local:
+4. materializar banco:
 
-```powershell
-monolithfarm-ingest --data-dir "C:\Users\Morgado\Downloads\FarmLab" --db-path "storage\monolithfarm.duckdb"
+```bash
+.venv/bin/python -m farmlab.database --data-dir "FarmLab" --db-path "storage/monolithfarm.duckdb"
 ```
 
-5. iniciar o painel:
+5. subir dashboard:
 
-```powershell
-streamlit run streamlit_app.py
+```bash
+.venv/bin/python -m streamlit run streamlit_app.py
 ```
 
-## Arquivos importantes para a execução
+## Validacao Rapida Pos-Subida
 
-- [scripts/start_dashboard.ps1](../scripts/start_dashboard.ps1): inicialização assistida
-- [streamlit_app.py](../streamlit_app.py): painel principal
-- [storage/monolithfarm.duckdb](../storage/monolithfarm.duckdb): banco local gerado após ingestão
+1. confirmar existencia do banco:
 
-## Observações
+```bash
+ls -lh storage/monolithfarm.duckdb
+```
 
-- o terminal deve permanecer aberto enquanto o painel estiver em uso;
-- ao fechar o terminal, o servidor local do `Streamlit` será encerrado;
-- a interface também permite atualizar o banco local diretamente pela barra lateral.
+2. validar tabelas:
+
+```bash
+.venv/bin/python - <<'PY'
+import duckdb
+con = duckdb.connect("storage/monolithfarm.duckdb", read_only=True)
+print(con.execute("show tables").fetchall())
+PY
+```
+
+3. validar URL no navegador: `http://127.0.0.1:8501`.
+
+## Problemas Comuns
+
+- "diretorio de dados nao encontrado":
+  - conferir caminho do `FarmLab`;
+  - usar `-DataDir` (PowerShell) ou argumento de caminho no Bash.
+- "pip nao encontrado no venv":
+  - instalar com `uv pip install --python ... -e .`.
+- porta ocupada:
+  - trocar para `8502` (ou outra porta livre).
+
+## Arquivos Relacionados
+
+- [../scripts/start_dashboard.ps1](../scripts/start_dashboard.ps1)
+- [../scripts/start_dashboard.sh](../scripts/start_dashboard.sh)
+- [../streamlit_app.py](../streamlit_app.py)
+- [../farmlab/database.py](../farmlab/database.py)

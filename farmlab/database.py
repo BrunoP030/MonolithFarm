@@ -131,9 +131,12 @@ def _prepare_frame_for_duckdb(frame: pd.DataFrame) -> pd.DataFrame:
     prepared = frame.copy()
     for column in prepared.columns:
         series = prepared[column]
-        if pd.api.types.is_datetime64tz_dtype(series):
+        if isinstance(series.dtype, pd.DatetimeTZDtype):
             prepared[column] = series.dt.tz_convert("UTC").dt.tz_localize(None)
         if column in {"geometry", "centroid"}:
             prepared[column] = series.map(lambda value: value.wkt if value is not None else None)
     return prepared
 
+
+if __name__ == "__main__":
+    main()
