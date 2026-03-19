@@ -10,6 +10,10 @@ def _resolve_default_data_dir() -> Path:
         return Path(env_path).expanduser()
 
     project_dir = Path(__file__).resolve().parent.parent
+    local_data_dir = project_dir / "data"
+    if local_data_dir.exists():
+        return local_data_dir
+
     local_data_dir = project_dir / "FarmLab"
     if local_data_dir.exists():
         return local_data_dir
@@ -19,5 +23,13 @@ def _resolve_default_data_dir() -> Path:
 
 DEFAULT_DATA_DIR = _resolve_default_data_dir()
 
-SEASON_MAPPING_COLUMNS = ["season_id", "area_label", "treatment", "notes"]
+SEASON_MAPPING_COLUMNS = [
+    "season_id",
+    "area_label",
+    "treatment",
+    "crop_type",
+    "comparison_pair",
+    "mapping_source",
+    "notes",
+]
 COST_INPUT_COLUMNS = ["season_id", "cost_category", "cost_per_ha_brl", "notes"]

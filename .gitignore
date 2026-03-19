@@ -6,3 +6,7 @@ __pycache__/
 storage/
 streamlit.out.log
 streamlit.err.log
+.ipynb_checkpoints/
+notebook_outputs/
+
+data/

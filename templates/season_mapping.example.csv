@@ -1,3 +1,5 @@
-season_id,area_label,treatment,notes
-season-example,Area Convencional,convencional,Substitua pelo season_id detectado no app
-
+season_id,area_label,treatment,crop_type,comparison_pair,mapping_source,notes
+0bf86c8b-2779-4a98-ba25-7cf9518ee316,Silagem Convencional,convencional,silagem,silagem,official_portal,Override apenas se necessario
+258e47e0-3bdc-4419-bedd-7b85812c2113,Grao 4.0,tecnologia_4_0,grao,grao,official_portal,Override apenas se necessario
+b7292cb8-72bb-447a-8feb-8ac983afd50b,Grao Convencional,convencional,grao,grao,official_portal,Override apenas se necessario
+f791bf13-1d24-4b4f-88bd-2569162df2b3,Silagem 4.0,tecnologia_4_0,silagem,silagem,official_portal,Override apenas se necessario

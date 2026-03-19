@@ -22,6 +22,15 @@ class DatasetPaths:
     weather_hourly: Path
     planting_layer: Path
     harvest_layer: Path
+    pest_list: Path | None = None
+    pest_details: Path | None = None
+    traps_events: Path | None = None
+    fertilization_layer: Path | None = None
+    spray_pressure_layer: Path | None = None
+    overlap_layer: Path | None = None
+    speed_layer: Path | None = None
+    state_layer: Path | None = None
+    stop_reason_layer: Path | None = None
 
 
 _TO_WGS84 = Transformer.from_crs(3857, 4326, always_xy=True)
@@ -68,6 +77,15 @@ def discover_dataset_paths(base_dir: Path) -> DatasetPaths:
         weather_hourly=_pick_one(root, "Metos*/CSV/*.csv"),
         planting_layer=_pick_one(root, "EKOS*/CSV/Layers/LAYER_MAP_PLANTING.csv"),
         harvest_layer=_pick_one(root, "EKOS*/CSV/Layers/LAYER_MAP_GRAIN_HARVESTING.csv"),
+        pest_list=_pick_optional_one(root, "EKOS*/CSV/Pest/pest_list.csv"),
+        pest_details=_pick_optional_one(root, "EKOS*/CSV/Pest/pest_details.csv"),
+        traps_events=_pick_optional_one(root, "EKOS*/CSV/Pest/traps_events.csv"),
+        fertilization_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_FERTILIZATION.csv"),
+        spray_pressure_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_SPRAY_PRESSURE.csv"),
+        overlap_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_OVERLAP.csv"),
+        speed_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_SPEED.csv"),
+        state_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_STATE.csv"),
+        stop_reason_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_STOP_REASON.csv"),
     )
 
 
@@ -113,6 +131,29 @@ def load_traps_list(path: Path) -> pd.DataFrame:
 def load_traps_data(path: Path) -> pd.DataFrame:
     frame = pd.read_csv(path, sep=";", dtype=str, encoding="utf-8-sig")
     for column in ["doneMissionCount", "idBusinessUnit", "lateMissionCount", "pendingMissionCount", "pestCount", "trapId"]:
+        frame[column] = frame[column].map(_parse_number)
+    frame["createdAt"] = pd.to_datetime(frame["createdAt"], errors="coerce", utc=True)
+    frame["event_date"] = frame["createdAt"].dt.date
+    return frame
+
+
+def load_pest_list(path: Path) -> pd.DataFrame:
+    frame = pd.read_csv(path, sep=";", dtype=str, encoding="utf-8-sig")
+    for column in ["MIIP_PEST_ID", "MIIP_PEST_ALERT", "MIIP_PEST_CONTROL", "MIIP_PEST_DAMAGE"]:
+        frame[column] = frame[column].map(_parse_number)
+    return frame
+
+
+def load_pest_details(path: Path) -> pd.DataFrame:
+    frame = pd.read_csv(path, sep=";", dtype=str, encoding="utf-8-sig")
+    for column in ["actionRay", "alert", "control", "damage", "daysAdhesiveFloor", "daysPheromone", "id"]:
+        frame[column] = frame[column].map(_parse_number)
+    return frame
+
+
+def load_traps_events(path: Path) -> pd.DataFrame:
+    frame = pd.read_csv(path, sep=";", dtype=str, encoding="utf-8-sig")
+    for column in ["farm", "id", "pestCount", "trapId"]:
         frame[column] = frame[column].map(_parse_number)
     frame["createdAt"] = pd.to_datetime(frame["createdAt"], errors="coerce", utc=True)
     frame["event_date"] = frame["createdAt"].dt.date
@@ -174,6 +215,13 @@ def _pick_one(root: Path, pattern: str) -> Path:
     matches = sorted(root.glob(pattern))
     if not matches:
         raise FileNotFoundError(f"Nenhum arquivo encontrado para o padrao: {pattern}")
+    return matches[0]
+
+
+def _pick_optional_one(root: Path, pattern: str) -> Path | None:
+    matches = sorted(root.glob(pattern))
+    if not matches:
+        return None
     return matches[0]
 
 
