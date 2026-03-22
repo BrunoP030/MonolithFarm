@@ -12,6 +12,11 @@ function Resolve-DefaultDataDir {
         return $env:MONOLITHFARM_DATA_DIR
     }
 
+    $localDataDir = Join-Path (Get-Location) "data"
+    if (Test-Path $localDataDir) {
+        return $localDataDir
+    }
+
     $localDataDir = Join-Path (Get-Location) "FarmLab"
     if (Test-Path $localDataDir) {
         return $localDataDir

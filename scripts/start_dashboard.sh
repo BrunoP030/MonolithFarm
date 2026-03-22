@@ -9,6 +9,8 @@ REFRESH="${REFRESH:-0}"
 if [[ -z "${DATA_DIR}" ]]; then
   if [[ -n "${MONOLITHFARM_DATA_DIR:-}" ]]; then
     DATA_DIR="${MONOLITHFARM_DATA_DIR}"
+  elif [[ -d "data" ]]; then
+    DATA_DIR="data"
   elif [[ -d "FarmLab" ]]; then
     DATA_DIR="FarmLab"
   else
