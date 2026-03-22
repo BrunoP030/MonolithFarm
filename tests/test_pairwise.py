@@ -6,6 +6,7 @@ import pandas as pd
 
 from farmlab.pairwise import (
     build_area_metadata,
+    build_hypothesis_matrix,
     build_ndvi_clean,
     build_pairwise_weekly_features,
     extract_detection_records,
@@ -155,6 +156,39 @@ class PairwiseAnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(features.loc["b7292cb8-72bb-447a-8feb-8ac983afd50b", "pair_ndvi_gap_4_0_minus_conv"], 0.20)
         self.assertAlmostEqual(features.loc["f791bf13-1d24-4b4f-88bd-2569162df2b3", "pair_ndvi_gap_4_0_minus_conv"], -0.20)
         self.assertAlmostEqual(features.loc["0bf86c8b-2779-4a98-ba25-7cf9518ee316", "pair_ndvi_gap_4_0_minus_conv"], -0.20)
+
+    def test_hypothesis_matrix_downgrades_asymmetric_coverage(self) -> None:
+        area_inventory = pd.DataFrame(
+            {
+                "season_id": ["tech", "conv"],
+                "comparison_pair": ["grao", "grao"],
+                "treatment": ["tecnologia_4_0", "convencional"],
+                "ndvi_mean": [0.50, 0.40],
+                "harvest_yield_mean_kg_ha": [pd.NA, 120000.0],
+                "avg_pest_count": [18.0, pd.NA],
+                "overlap_area_pct_bbox": [0.01, 0.03],
+                "stop_duration_h_per_bbox_ha": [0.01, 0.01],
+                "fert_dose_gap_abs_mean_kg_ha": [90.0, 120.0],
+                "soil_samples_available": [8, 8],
+                "mapping_source": ["official_portal", "official_portal"],
+                "miip_days": [20, pd.NA],
+            }
+        )
+        pairwise_weekly_features = pd.DataFrame(
+            {
+                "comparison_pair": ["grao"],
+                "has_weather_coverage_week": [True],
+            }
+        )
+
+        matrix = build_hypothesis_matrix(
+            area_inventory=area_inventory,
+            pairwise_weekly_features=pairwise_weekly_features,
+        )
+
+        self.assertEqual(matrix.iloc[0]["evidence_strength"], "baixa")
+        self.assertIn("Produtividade consolidada ausente em um dos lados do par.", matrix.iloc[0]["known_gaps"])
+        self.assertIn("MIIP sem cobertura nos dois lados do par; comparacao de pragas fica parcial.", matrix.iloc[0]["known_gaps"])
 
 
 if __name__ == "__main__":

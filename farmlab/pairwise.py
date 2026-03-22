@@ -588,15 +588,18 @@ def build_hypothesis_matrix(
         supports_conv: list[str] = []
         known_gaps: list[str] = []
         evidence_categories = 0
+        critical_gaps = 0
 
         if not tech.empty and not conv.empty:
+            tech_row = tech.iloc[0]
+            conv_row = conv.iloc[0]
             evidence_categories += _append_directional_evidence(
                 supports_4_0=supports_4_0,
                 supports_conv=supports_conv,
                 label_better="NDVI medio da safra",
                 positive_if_higher=True,
-                tech_value=tech.iloc[0].get("ndvi_mean"),
-                conv_value=conv.iloc[0].get("ndvi_mean"),
+                tech_value=tech_row.get("ndvi_mean"),
+                conv_value=conv_row.get("ndvi_mean"),
                 unit="",
                 threshold=0.02,
             )
@@ -605,8 +608,8 @@ def build_hypothesis_matrix(
                 supports_conv=supports_conv,
                 label_better="Produtividade de colheita",
                 positive_if_higher=True,
-                tech_value=tech.iloc[0].get("harvest_yield_mean_kg_ha"),
-                conv_value=conv.iloc[0].get("harvest_yield_mean_kg_ha"),
+                tech_value=tech_row.get("harvest_yield_mean_kg_ha"),
+                conv_value=conv_row.get("harvest_yield_mean_kg_ha"),
                 unit=" kg/ha",
                 threshold=100.0,
             )
@@ -615,8 +618,8 @@ def build_hypothesis_matrix(
                 supports_conv=supports_conv,
                 label_better="Pressao media de pragas",
                 positive_if_higher=False,
-                tech_value=tech.iloc[0].get("avg_pest_count"),
-                conv_value=conv.iloc[0].get("avg_pest_count"),
+                tech_value=tech_row.get("avg_pest_count"),
+                conv_value=conv_row.get("avg_pest_count"),
                 unit=" insetos",
                 threshold=2.0,
             )
@@ -625,8 +628,8 @@ def build_hypothesis_matrix(
                 supports_conv=supports_conv,
                 label_better="Sobreposicao operacional por area",
                 positive_if_higher=False,
-                tech_value=tech.iloc[0].get("overlap_area_pct_bbox"),
-                conv_value=conv.iloc[0].get("overlap_area_pct_bbox"),
+                tech_value=tech_row.get("overlap_area_pct_bbox"),
+                conv_value=conv_row.get("overlap_area_pct_bbox"),
                 unit=" ha/ha",
                 threshold=0.01,
             )
@@ -635,8 +638,8 @@ def build_hypothesis_matrix(
                 supports_conv=supports_conv,
                 label_better="Horas de parada por area",
                 positive_if_higher=False,
-                tech_value=tech.iloc[0].get("stop_duration_h_per_bbox_ha"),
-                conv_value=conv.iloc[0].get("stop_duration_h_per_bbox_ha"),
+                tech_value=tech_row.get("stop_duration_h_per_bbox_ha"),
+                conv_value=conv_row.get("stop_duration_h_per_bbox_ha"),
                 unit=" h/ha",
                 threshold=0.05,
             )
@@ -645,11 +648,24 @@ def build_hypothesis_matrix(
                 supports_conv=supports_conv,
                 label_better="Conformidade media de dose em adubacao",
                 positive_if_higher=False,
-                tech_value=tech.iloc[0].get("fert_dose_gap_abs_mean_kg_ha"),
-                conv_value=conv.iloc[0].get("fert_dose_gap_abs_mean_kg_ha"),
+                tech_value=tech_row.get("fert_dose_gap_abs_mean_kg_ha"),
+                conv_value=conv_row.get("fert_dose_gap_abs_mean_kg_ha"),
                 unit=" kg/ha",
                 threshold=10.0,
             )
+
+            if _is_partial_metric_pair(tech_row.get("harvest_yield_mean_kg_ha"), conv_row.get("harvest_yield_mean_kg_ha")):
+                known_gaps.append("Produtividade consolidada ausente em um dos lados do par.")
+                critical_gaps += 1
+
+            if _is_partial_metric_pair(tech_row.get("avg_pest_count"), conv_row.get("avg_pest_count")):
+                known_gaps.append("MIIP sem cobertura nos dois lados do par; comparacao de pragas fica parcial.")
+                critical_gaps += 1
+
+            tech_miip_days = tech_row.get("miip_days")
+            conv_miip_days = conv_row.get("miip_days")
+            if _is_coverage_ratio_high(tech_miip_days, conv_miip_days, ratio_threshold=2.0):
+                known_gaps.append("MIIP com cobertura muito desigual entre as areas do par.")
 
         pair_weeks = pairwise_weekly_features[pairwise_weekly_features["comparison_pair"] == comparison_pair]
         if not pair_weeks.empty and not pair_weeks["has_weather_coverage_week"].astype("boolean").fillna(False).all():
@@ -667,6 +683,7 @@ def build_hypothesis_matrix(
             evidence_strength = "alta"
         elif evidence_categories >= 2:
             evidence_strength = "media"
+        evidence_strength = _downgrade_evidence_strength(evidence_strength, critical_gaps=critical_gaps)
 
         rows.append(
             {
@@ -1029,6 +1046,13 @@ def _summarize_area_ops(ops_area_daily: pd.DataFrame) -> pd.DataFrame:
         rows.append(
             {
                 "season_id": season_id,
+                "ops_days": int(group["date"].nunique()) if "date" in group.columns else 0,
+                "harvest_days": int(group.get("harvest_points", pd.Series(dtype="float64")).fillna(0).gt(0).sum()),
+                "fert_days": int(group.get("fert_points", pd.Series(dtype="float64")).fillna(0).gt(0).sum()),
+                "overlap_days": int(group.get("overlap_area_ha", pd.Series(dtype="float64")).fillna(0).gt(0).sum()),
+                "speed_days": int(group.get("speed_points", pd.Series(dtype="float64")).fillna(0).gt(0).sum()),
+                "state_days": int(group.get("state_points", pd.Series(dtype="float64")).fillna(0).gt(0).sum()),
+                "stop_days": int(group.get("stop_events", pd.Series(dtype="float64")).fillna(0).gt(0).sum()),
                 "planting_population_mean_ha": _weighted_mean(group, "planting_population_mean_ha", "planting_points"),
                 "harvest_yield_mean_kg_ha": _weighted_mean(group, "harvest_yield_mean_kg_ha", "harvest_points"),
                 "harvest_humidity_mean_pct": _weighted_mean(group, "harvest_humidity_mean_pct", "harvest_points"),
@@ -1049,6 +1073,9 @@ def _summarize_area_miip(miip_daily: pd.DataFrame) -> pd.DataFrame:
     return (
         miip_daily.groupby("season_id", as_index=False)
         .agg(
+            miip_days=("date", "nunique"),
+            trap_readings_total=("trap_readings", "sum"),
+            traps_reporting_max=("traps_reporting", "max"),
             avg_pest_count=("avg_pest_count", "mean"),
             total_pest_count=("total_pest_count", "sum"),
             alert_hits=("alert_hits", "sum"),
@@ -1178,6 +1205,30 @@ def _append_directional_evidence(
     label = "4.0" if preferred is supports_4_0 else "convencional"
     preferred.append(f"{label_better}: {label} leva vantagem ({delta:+.2f}{unit}).")
     return 1
+
+
+def _is_partial_metric_pair(left: object, right: object) -> bool:
+    return (pd.isna(left) and not pd.isna(right)) or (pd.isna(right) and not pd.isna(left))
+
+
+def _is_coverage_ratio_high(left: object, right: object, *, ratio_threshold: float) -> bool:
+    if left is None or right is None or pd.isna(left) or pd.isna(right):
+        return False
+    low = min(float(left), float(right))
+    high = max(float(left), float(right))
+    if low <= 0:
+        return False
+    return (high / low) >= ratio_threshold
+
+
+def _downgrade_evidence_strength(evidence_strength: str, *, critical_gaps: int) -> str:
+    if critical_gaps <= 0:
+        return evidence_strength
+    if evidence_strength == "alta":
+        return "media" if critical_gaps == 1 else "baixa"
+    if evidence_strength == "media":
+        return "baixa"
+    return evidence_strength
 
 
 def _safe_divide(numerator: pd.Series | object, denominator: pd.Series | object) -> pd.Series:

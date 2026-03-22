@@ -61,6 +61,7 @@ def build_notebook() -> dict:
             """
             from __future__ import annotations
 
+            import importlib.util
             import os
             import subprocess
             import sys
@@ -80,14 +81,26 @@ def build_notebook() -> dict:
             PROJECT_DIR = find_project_dir()
             DATA_DIR = Path(os.environ.get("MONOLITHFARM_DATA_DIR", PROJECT_DIR / "data")).expanduser().resolve()
             OUTPUT_DIR = Path(os.environ.get("MONOLITHFARM_OUTPUT_DIR", PROJECT_DIR / "notebook_outputs")).expanduser().resolve()
-            AUTO_INSTALL = os.environ.get("MONOLITHFARM_AUTO_INSTALL", "1") == "1"
+            AUTO_INSTALL = os.environ.get("MONOLITHFARM_AUTO_INSTALL", "0") == "1"
 
-            if AUTO_INSTALL:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-e", str(PROJECT_DIR)])
+            if str(PROJECT_DIR) not in sys.path:
+                sys.path.insert(0, str(PROJECT_DIR))
+
+
+            def package_available(name: str) -> bool:
+                return importlib.util.find_spec(name) is not None
+
+
+            if AUTO_INSTALL and not package_available("farmlab"):
+                try:
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-e", str(PROJECT_DIR)])
+                except Exception:
+                    subprocess.check_call(["uv", "pip", "install", "--python", sys.executable, "-e", str(PROJECT_DIR)])
 
             print("PROJECT_DIR =", PROJECT_DIR)
             print("DATA_DIR    =", DATA_DIR)
             print("OUTPUT_DIR  =", OUTPUT_DIR)
+            print("AUTO_INSTALL =", AUTO_INSTALL)
 
             if not DATA_DIR.exists():
                 raise FileNotFoundError(f"Diretorio de dados nao encontrado: {DATA_DIR}")
@@ -97,6 +110,7 @@ def build_notebook() -> dict:
             """
             import pandas as pd
             import plotly.express as px
+            from IPython.display import Image as NotebookImage
             from IPython.display import Markdown, display
 
             from farmlab.pairwise import OUTPUT_TABLES, build_phase1_workspace, save_phase1_outputs
@@ -111,6 +125,73 @@ def build_notebook() -> dict:
             hypothesis_matrix = workspace["hypothesis_matrix"]
 
             print("Tabelas prontas:", ", ".join(OUTPUT_TABLES))
+            """
+        ),
+        code_cell(
+            """
+            def sample_rows_per_area(frame: pd.DataFrame, max_images_per_area: int = 3) -> pd.DataFrame:
+                if frame.empty:
+                    return frame.copy()
+
+                sampled_groups = []
+                for _, group in frame.sort_values("date").groupby("season_id", sort=False):
+                    if len(group) <= max_images_per_area:
+                        sampled_groups.append(group)
+                        continue
+
+                    index_positions = sorted({0, len(group) // 2, len(group) - 1})
+                    sampled_groups.append(group.iloc[index_positions[:max_images_per_area]])
+
+                return pd.concat(sampled_groups, ignore_index=True)
+
+
+            def closest_rows_by_date(frame: pd.DataFrame, target_date: str) -> pd.DataFrame:
+                if frame.empty:
+                    return frame.copy()
+
+                target = pd.Timestamp(target_date)
+                rows = []
+                for _, group in frame.sort_values("date").groupby("season_id", sort=False):
+                    candidate = group.loc[(group["date"] - target).abs().idxmin()]
+                    rows.append(candidate)
+                return pd.DataFrame(rows).sort_values(["comparison_pair", "area_label"]).reset_index(drop=True)
+
+
+            def display_ndvi_gallery(frame: pd.DataFrame, title: str, *, width: int = 420) -> None:
+                display(Markdown(f"## {title}"))
+                if frame.empty:
+                    print("Sem imagens NDVI disponiveis para a selecao.")
+                    return
+
+                for area_label, group in frame.sort_values(["comparison_pair", "area_label", "date"]).groupby("area_label", sort=False):
+                    area_info = group.iloc[0]
+                    display(Markdown(f"### {area_label}"))
+                    display(
+                        group[
+                            [
+                                "date",
+                                "comparison_pair",
+                                "treatment",
+                                "ndvi_mean",
+                                "soil_pct",
+                                "dense_veg_pct",
+                                "b1_valid_pixels",
+                            ]
+                        ].reset_index(drop=True)
+                    )
+                    for row in group.itertuples(index=False):
+                        caption = (
+                            f"{pd.Timestamp(row.date).date()} | "
+                            f"NDVI medio={row.ndvi_mean:.3f} | "
+                            f"solo={row.soil_pct:.1f}% | "
+                            f"veg densa={row.dense_veg_pct:.1f}%"
+                        )
+                        display(Markdown(caption))
+                        if pd.notna(row.image_path):
+                            display(NotebookImage(filename=str(row.image_path), width=width))
+                        else:
+                            print("Imagem JPG nao encontrada para esta cena.")
+                display(Markdown("> As imagens JPG servem para inspecao visual. A analise quantitativa continua usando o CSV de metadados."))
             """
         ),
         code_cell(
@@ -140,6 +221,19 @@ def build_notebook() -> dict:
                 )
                 fig.update_layout(height=700)
                 fig.show()
+            """
+        ),
+        code_cell(
+            """
+            gallery_rows = sample_rows_per_area(ndvi_clean, max_images_per_area=3)
+            display_ndvi_gallery(gallery_rows, "Galeria NDVI por area")
+            """
+        ),
+        code_cell(
+            """
+            TARGET_DATE = "2025-12-22"
+            comparison_rows = closest_rows_by_date(ndvi_clean, TARGET_DATE)
+            display_ndvi_gallery(comparison_rows, f"Comparacao visual por data aproximada: {TARGET_DATE}", width=460)
             """
         ),
         code_cell(
