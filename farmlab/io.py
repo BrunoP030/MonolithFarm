@@ -31,6 +31,13 @@ class DatasetPaths:
     speed_layer: Path | None = None
     state_layer: Path | None = None
     stop_reason_layer: Path | None = None
+    alarm_layer: Path | None = None
+    engine_rotation_layer: Path | None = None
+    engine_temperature_layer: Path | None = None
+    fuel_consumption_layer: Path | None = None
+    parameterized_alert_layer: Path | None = None
+    schedule_layer: Path | None = None
+    telemetry_communication_layer: Path | None = None
 
 
 _TO_WGS84 = Transformer.from_crs(3857, 4326, always_xy=True)
@@ -86,6 +93,13 @@ def discover_dataset_paths(base_dir: Path) -> DatasetPaths:
         speed_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_SPEED.csv"),
         state_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_STATE.csv"),
         stop_reason_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_STOP_REASON.csv"),
+        alarm_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_ALARM.csv"),
+        engine_rotation_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_ENGINE_ROTATION.csv"),
+        engine_temperature_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_ENGINE_TEMPERATURE.csv"),
+        fuel_consumption_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_FUEL_CONSUMPTION.csv"),
+        parameterized_alert_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_PARAMETERIZED_ALERT.csv"),
+        schedule_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_SCHEDULE.csv"),
+        telemetry_communication_layer=_pick_optional_one(root, "EKOS*/CSV/Layers/LAYER_MAP_TELEMETRY_COMMUNICATION.csv"),
     )
 
 
