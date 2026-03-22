@@ -1,114 +1,180 @@
 # Como Executar o Projeto
 
-Guia objetivo para subir o MonolithFarm com banco local DuckDB e dashboard Streamlit.
+Guia objetivo para subir o MonolithFarm com dashboard, revisoes analiticas e notebooks Jupyter.
 
 ## Pre-requisitos
 
 - Python `3.11+`;
-- pacote de dados `FarmLab` disponivel localmente;
+- dados privados disponiveis localmente;
 - terminal:
   - Windows: PowerShell;
-  - Linux/macOS: Bash.
+  - Linux/macOS: Bash;
+- `uv` instalado.
 
-Opcional (recomendado): `uv` para ambientes onde `pip` nao estiver disponivel no venv.
+`uv` e o caminho recomendado porque o `.venv` criado por ele pode nao incluir `pip`, e os scripts do projeto ja tratam isso.
 
 ## Resolucao do Diretorio de Dados
 
-O projeto busca os dados nesta ordem:
+O projeto procura os dados nesta ordem:
 
 1. `MONOLITHFARM_DATA_DIR`;
-2. `./FarmLab`;
-3. `C:\Users\Morgado\Downloads\FarmLab` (fallback legado).
+2. `./data`;
+3. `./FarmLab`;
+4. `C:\Users\Morgado\Downloads\FarmLab`.
 
-## Execucao Rapida
+Para este repositorio, o caminho esperado e `./data`.
+
+## Preparar o Ambiente
 
 ### Windows
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh
+uv venv .venv
+uv pip install --python .\.venv\Scripts\python.exe -e .
 ```
 
 ### Linux/macOS
 
 ```bash
-REFRESH=1 ./scripts/start_dashboard.sh
+uv venv .venv
+uv pip install --python .venv/bin/python -e .
 ```
 
-Apos iniciar:
+## Subir o Dashboard
+
+### Windows
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh -DataDir .\data
+```
+
+### Linux/macOS
+
+```bash
+REFRESH=1 ./scripts/start_dashboard.sh data
+```
+
+URL padrao:
 
 ```text
 http://127.0.0.1:8501
 ```
 
-## Executar em Porta Diferente
+## Trocar Porta
 
 ### Windows
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh -Port 8502
+powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh -DataDir .\data -Port 8502
 ```
 
 ### Linux/macOS
 
 ```bash
-REFRESH=1 ./scripts/start_dashboard.sh "" "storage/monolithfarm.duckdb" 8502
+REFRESH=1 ./scripts/start_dashboard.sh data storage/monolithfarm.duckdb 8502
 ```
 
-## Diretorio de Dados Personalizado
+## Rodar Tudo em Um Unico Notebook
+
+Notebook principal: `notebooks/ndvi_master_analysis.ipynb`.
 
 ### Windows
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh -DataDir "D:\Dados\FarmLab"
+uv pip install --python .\.venv\Scripts\python.exe jupyterlab ipykernel
+.\.venv\Scripts\python.exe .\scripts\generate_ndvi_master_notebook.py
+.\.venv\Scripts\python.exe -m jupyter lab notebooks\ndvi_master_analysis.ipynb
 ```
 
 ### Linux/macOS
 
 ```bash
-REFRESH=1 ./scripts/start_dashboard.sh "/caminho/FarmLab"
+uv pip install --python .venv/bin/python jupyterlab ipykernel
+.venv/bin/python scripts/generate_ndvi_master_notebook.py
+.venv/bin/python -m jupyter lab notebooks/ndvi_master_analysis.ipynb
 ```
 
-## Fluxo Manual (quando necessario)
+O notebook mestre consolida:
 
-1. criar ambiente virtual:
+- inventario das areas;
+- fase 1 pareada;
+- fase 2 de deep dive de NDVI;
+- graficos Plotly inline;
+- galerias visuais das imagens NDVI;
+- outlook pre-colheita;
+- export dos artefatos finais.
+
+## Gerar as Revisoes sem Abrir o Notebook
+
+### Fase 1
+
+Linux/macOS:
 
 ```bash
-python -m venv .venv
+.venv/bin/python scripts/generate_phase1_review.py --data-dir data --output-dir notebook_outputs
 ```
 
-2. instalar projeto:
+Windows:
 
-```bash
-.venv/bin/python -m pip install -e .
+```powershell
+.\.venv\Scripts\python.exe .\scripts\generate_phase1_review.py --data-dir data --output-dir notebook_outputs
 ```
 
-3. fallback sem `pip`:
+### Fase 2
+
+Linux/macOS:
 
 ```bash
+.venv/bin/python scripts/generate_phase2_ndvi_review.py --data-dir data --output-dir notebook_outputs/phase2_ndvi
+```
+
+Windows:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\generate_phase2_ndvi_review.py --data-dir data --output-dir notebook_outputs/phase2_ndvi
+```
+
+## Fluxo Manual
+
+Use este fluxo se quiser controlar cada etapa explicitamente.
+
+### Linux/macOS
+
+```bash
+uv venv .venv
 uv pip install --python .venv/bin/python -e .
+.venv/bin/python -m farmlab.database --data-dir data --db-path storage/monolithfarm.duckdb
+.venv/bin/python -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
-4. materializar banco:
+### Windows
 
-```bash
-.venv/bin/python -m farmlab.database --data-dir "FarmLab" --db-path "storage/monolithfarm.duckdb"
+```powershell
+uv venv .venv
+uv pip install --python .\.venv\Scripts\python.exe -e .
+.\.venv\Scripts\python.exe -m farmlab.database --data-dir data --db-path storage/monolithfarm.duckdb
+.\.venv\Scripts\python.exe -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
-5. subir dashboard:
+## Validacao Rapida
 
-```bash
-.venv/bin/python -m streamlit run streamlit_app.py
-```
+1. Confirmar o banco:
 
-## Validacao Rapida Pos-Subida
-
-1. confirmar existencia do banco:
+Linux/macOS:
 
 ```bash
 ls -lh storage/monolithfarm.duckdb
 ```
 
-2. validar tabelas:
+Windows:
+
+```powershell
+Get-Item .\storage\monolithfarm.duckdb
+```
+
+2. Verificar tabelas:
+
+Linux/macOS:
 
 ```bash
 .venv/bin/python - <<'PY'
@@ -118,21 +184,42 @@ print(con.execute("show tables").fetchall())
 PY
 ```
 
-3. validar URL no navegador: `http://127.0.0.1:8501`.
+Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import duckdb; con = duckdb.connect('storage/monolithfarm.duckdb', read_only=True); print(con.execute('show tables').fetchall())"
+```
+
+3. Confirmar a URL no navegador.
 
 ## Problemas Comuns
 
-- "diretorio de dados nao encontrado":
-  - conferir caminho do `FarmLab`;
-  - usar `-DataDir` (PowerShell) ou argumento de caminho no Bash.
-- "pip nao encontrado no venv":
-  - instalar com `uv pip install --python ... -e .`.
+- `diretorio de dados nao encontrado`:
+  - confirme que os dados estao em `./data` ou passe o caminho explicitamente;
+  - use `-DataDir` no PowerShell ou o primeiro argumento no script Bash.
+- `pip nao encontrado no venv`:
+  - use `uv pip install --python ...` em vez de `python -m pip`.
+- `modulo jupyter nao encontrado`:
+  - instale `jupyterlab` e `ipykernel` no mesmo Python da `.venv`.
 - porta ocupada:
-  - trocar para `8502` (ou outra porta livre).
+  - troque a porta para `8502` ou outra livre.
+
+## Privacidade e Git
+
+Nao inclua em commit:
+
+- `data/`
+- `storage/`
+- `notebook_outputs/`
+- `.venv/`
+
+Esses caminhos ja estao ignorados no `.gitignore`.
 
 ## Arquivos Relacionados
 
+- [../README.md](../README.md)
 - [../scripts/start_dashboard.ps1](../scripts/start_dashboard.ps1)
 - [../scripts/start_dashboard.sh](../scripts/start_dashboard.sh)
+- [../scripts/generate_ndvi_master_notebook.py](../scripts/generate_ndvi_master_notebook.py)
 - [../streamlit_app.py](../streamlit_app.py)
 - [../farmlab/database.py](../farmlab/database.py)
