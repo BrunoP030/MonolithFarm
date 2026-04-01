@@ -11,7 +11,7 @@ Guia objetivo para subir o MonolithFarm com dashboard, revisoes analiticas e not
   - Linux/macOS: Bash;
 - `uv` instalado.
 
-`uv` e o caminho recomendado porque o `.venv` criado por ele pode nao incluir `pip`, e os scripts do projeto ja tratam isso.
+`uv` e usado porque o `.venv` criado por ele pode nao incluir `pip`, e os scripts do projeto ja tratam esse caso.
 
 ## Resolucao do Diretorio de Dados
 
@@ -104,6 +104,66 @@ O notebook mestre consolida:
 - outlook pre-colheita;
 - export dos artefatos finais.
 
+## Paths Ajustaveis sem Commit
+
+Para evitar commitar caminhos locais ou do Drive:
+
+1. copie [../monolithfarm.paths.example.json](../monolithfarm.paths.example.json) para `.monolithfarm.paths.json`;
+2. defina os perfis no arquivo local;
+3. use `MONOLITHFARM_PROFILE=local`, `MONOLITHFARM_PROFILE=colab_drive` ou outro perfil definido no arquivo.
+
+Esse arquivo local esta ignorado no Git.
+
+## Notebook Completo CRISP-DM
+
+Notebook completo: `notebooks/complete_ndvi_analysis.ipynb`.
+
+Ele consolida:
+
+- objetivo do projeto a partir de `info.md`;
+- CRISP-DM com foco em NDVI;
+- estatistica descritiva com `shape` e `describe`;
+- z-score para deteccao de outliers;
+- testes classicos com `p-value`;
+- correlacoes entre NDVI, clima, operacao e pragas;
+- modelagem interpretavel;
+- export final em CSV.
+
+### Windows
+
+```powershell
+uv pip install --python .\.venv\Scripts\python.exe jupyterlab ipykernel
+.\.venv\Scripts\python.exe .\scripts\generate_complete_ndvi_notebook.py
+.\.venv\Scripts\python.exe -m jupyter lab notebooks\complete_ndvi_analysis.ipynb
+```
+
+### Linux/macOS
+
+```bash
+uv pip install --python .venv/bin/python jupyterlab ipykernel
+.venv/bin/python scripts/generate_complete_ndvi_notebook.py
+.venv/bin/python -m jupyter lab notebooks/complete_ndvi_analysis.ipynb
+```
+
+## Google Colab + Drive
+
+O notebook `complete_ndvi_analysis.ipynb` detecta Colab e permite montar o Drive.
+
+Fluxo:
+
+1. coloque o repositorio no Google Drive;
+2. abra o notebook no Colab;
+3. ajuste `COLAB_PROJECT_HINTS` se o caminho for diferente;
+4. rode a primeira celula para montar o Drive e localizar o projeto;
+5. se necessario, defina:
+   - `MONOLITHFARM_PROJECT_DIR`
+   - `MONOLITHFARM_DATA_DIR`
+   - `MONOLITHFARM_OUTPUT_DIR`
+
+Guia dedicado:
+
+- [COLAB_DRIVE.md](./COLAB_DRIVE.md)
+
 ## Gerar as Revisoes sem Abrir o Notebook
 
 ### Fase 1
@@ -134,9 +194,23 @@ Windows:
 .\.venv\Scripts\python.exe .\scripts\generate_phase2_ndvi_review.py --data-dir data --output-dir notebook_outputs/phase2_ndvi
 ```
 
+### Projeto Completo
+
+Linux/macOS:
+
+```bash
+.venv/bin/python scripts/generate_complete_ndvi_review.py --data-dir data --output-dir notebook_outputs/complete_ndvi
+```
+
+Windows:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\generate_complete_ndvi_review.py --data-dir data --output-dir notebook_outputs/complete_ndvi
+```
+
 ## Fluxo Manual
 
-Use este fluxo se quiser controlar cada etapa explicitamente.
+Fluxo manual com controle explicito das etapas.
 
 ### Linux/macOS
 

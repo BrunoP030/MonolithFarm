@@ -17,7 +17,7 @@ Comparar, com base tecnica, areas de milho:
 - manejo convencional;
 - manejo apoiado por tecnologias 4.0.
 
-O objetivo final e sustentar explicacoes sobre vigor vegetativo, produtividade e eficiencia operacional, preparando o caminho para comparacao economica (custo por hectare e retorno).
+O objetivo e explicar diferencas de vigor vegetativo, produtividade e eficiencia operacional, com base para comparacao economica posterior (custo por hectare e retorno).
 
 ## Arquitetura da Solucao
 
@@ -83,7 +83,7 @@ O projeto resolve o diretorio de dados nesta ordem:
 
 ## Preparacao do Ambiente
 
-O fluxo mais confiavel hoje usa `uv` para criar o ambiente e instalar dependencias, porque o `.venv` gerado por `uv` pode nao ter `pip`.
+A preparacao abaixo usa `uv` para criar o ambiente e instalar dependencias, porque o `.venv` gerado por `uv` pode nao ter `pip`.
 
 ### Windows
 
@@ -99,7 +99,7 @@ uv venv .venv
 uv pip install --python .venv/bin/python -e .
 ```
 
-Se `uv` nao estiver disponivel, os scripts de dashboard tentam criar o ambiente automaticamente com `python -m venv`, mas o caminho recomendado continua sendo `uv`.
+Se `uv` nao estiver disponivel, os scripts de dashboard tentam criar o ambiente automaticamente com `python -m venv`.
 
 ## Execucao Rapida do Dashboard
 
@@ -121,7 +121,7 @@ Apos iniciar, acessar:
 http://127.0.0.1:8501
 ```
 
-Se quiser forcar explicitamente a pasta `data/` deste repositorio:
+Para informar explicitamente a pasta `data/` deste repositorio:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -DataDir .\data -Refresh
@@ -145,6 +145,7 @@ REFRESH=1 ./scripts/start_dashboard.sh data storage/monolithfarm.duckdb 8502
 
 - [docs/COMO_EXECUTAR.md](docs/COMO_EXECUTAR.md)
 - [docs/PRIMEIRO_USO_FACULDADE.md](docs/PRIMEIRO_USO_FACULDADE.md)
+- [docs/COLAB_DRIVE.md](docs/COLAB_DRIVE.md)
 
 ## Notebook Mestre no Jupyter
 
@@ -181,6 +182,62 @@ Os notebooks detectam automaticamente a raiz do projeto e usam `./data` por padr
 - `MONOLITHFARM_PROJECT_DIR`
 - `MONOLITHFARM_DATA_DIR`
 - `MONOLITHFARM_OUTPUT_DIR`
+
+Para nao commitar caminhos pessoais, use um arquivo local ignorado pelo Git:
+
+- copie [monolithfarm.paths.example.json](monolithfarm.paths.example.json) para `.monolithfarm.paths.json`;
+- defina os perfis `local`, `colab_drive` ou outros perfis necessarios;
+- selecione o perfil com `MONOLITHFARM_PROFILE`.
+
+## Notebook Completo do Projeto
+
+O notebook completo do projeto esta em [complete_ndvi_analysis.ipynb](notebooks/complete_ndvi_analysis.ipynb).
+
+Cobertura:
+
+- leitura completa do objetivo em `info.md`;
+- execucao local;
+- execucao no Google Colab com pasta no Drive;
+- integracao das fases 1, 2 e 3 em um unico fluxo analitico.
+
+### Windows
+
+```powershell
+uv pip install --python .\.venv\Scripts\python.exe jupyterlab ipykernel
+.\.venv\Scripts\python.exe .\scripts\generate_complete_ndvi_notebook.py
+.\.venv\Scripts\python.exe -m jupyter lab notebooks\complete_ndvi_analysis.ipynb
+```
+
+### Linux/macOS
+
+```bash
+uv pip install --python .venv/bin/python jupyterlab ipykernel
+.venv/bin/python scripts/generate_complete_ndvi_notebook.py
+.venv/bin/python -m jupyter lab notebooks/complete_ndvi_analysis.ipynb
+```
+
+Para gerar os artefatos finais sem abrir o notebook:
+
+Linux/macOS:
+
+```bash
+.venv/bin/python scripts/generate_complete_ndvi_review.py --data-dir data --output-dir notebook_outputs/complete_ndvi
+```
+
+Windows:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\generate_complete_ndvi_review.py --data-dir data --output-dir notebook_outputs/complete_ndvi
+```
+
+Saidas principais:
+
+- `notebook_outputs/complete_ndvi/dataset_overview.csv`
+- `notebook_outputs/complete_ndvi/numeric_profiles.csv`
+- `notebook_outputs/complete_ndvi/ndvi_outliers.csv`
+- `notebook_outputs/complete_ndvi/pair_classic_tests.csv`
+- `notebook_outputs/complete_ndvi/weekly_correlations.csv`
+- `notebook_outputs/complete_ndvi/review/review_summary.md`
 
 ## Revisao e Graficos da Fase 1
 
@@ -298,7 +355,7 @@ Isso protege os dados privados do projeto e evita versionar saidas geradas local
 - estacao meteorologica representa contexto macro da fazenda;
 - comparacao economica depende de custos externos fornecidos pelo usuario.
 
-## Proximos Passos Recomendados
+## Desenvolvimentos Pendentes
 
 1. integrar todas as tabelas EKOS e MIIP descritas na documentacao oficial;
 2. padronizar joins por `Service Order`, `field`, `trap`, `data/hora`;

@@ -66,23 +66,27 @@ URL esperada:
 http://127.0.0.1:8501
 ```
 
-## 5) Abrir o Notebook Mestre
+## 5) Abrir o Notebook Completo
+
+Notebook completo: `notebooks/complete_ndvi_analysis.ipynb`.
 
 Windows:
 
 ```powershell
 uv pip install --python .\.venv\Scripts\python.exe jupyterlab ipykernel
-.\.venv\Scripts\python.exe .\scripts\generate_ndvi_master_notebook.py
-.\.venv\Scripts\python.exe -m jupyter lab notebooks\ndvi_master_analysis.ipynb
+.\.venv\Scripts\python.exe .\scripts\generate_complete_ndvi_notebook.py
+.\.venv\Scripts\python.exe -m jupyter lab notebooks\complete_ndvi_analysis.ipynb
 ```
 
 Linux/macOS:
 
 ```bash
 uv pip install --python .venv/bin/python jupyterlab ipykernel
-.venv/bin/python scripts/generate_ndvi_master_notebook.py
-.venv/bin/python -m jupyter lab notebooks/ndvi_master_analysis.ipynb
+.venv/bin/python scripts/generate_complete_ndvi_notebook.py
+.venv/bin/python -m jupyter lab notebooks/complete_ndvi_analysis.ipynb
 ```
+
+O notebook legado por fases permanece disponivel em `notebooks/ndvi_master_analysis.ipynb`.
 
 ## 6) Se os Dados Estiverem em Outro Caminho
 
