@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from textwrap import dedent
 
+from notebook_bootstrap import build_runtime_bootstrap_source
+
 
 def markdown_cell(source: str) -> dict:
     return {
@@ -58,53 +60,7 @@ def build_notebook() -> dict:
             """
         ),
         code_cell(
-            """
-            from __future__ import annotations
-
-            import importlib.util
-            import os
-            import subprocess
-            import sys
-            from pathlib import Path
-
-
-            def find_project_dir() -> Path:
-                if os.environ.get("MONOLITHFARM_PROJECT_DIR"):
-                    return Path(os.environ["MONOLITHFARM_PROJECT_DIR"]).expanduser().resolve()
-                current = Path.cwd().resolve()
-                for candidate in [current, *current.parents]:
-                    if (candidate / "pyproject.toml").exists():
-                        return candidate
-                raise FileNotFoundError("Nao foi possivel localizar `pyproject.toml`. Defina MONOLITHFARM_PROJECT_DIR.")
-
-
-            PROJECT_DIR = find_project_dir()
-            DATA_DIR = Path(os.environ.get("MONOLITHFARM_DATA_DIR", PROJECT_DIR / "data")).expanduser().resolve()
-            OUTPUT_DIR = Path(os.environ.get("MONOLITHFARM_OUTPUT_DIR", PROJECT_DIR / "notebook_outputs")).expanduser().resolve()
-            AUTO_INSTALL = os.environ.get("MONOLITHFARM_AUTO_INSTALL", "0") == "1"
-
-            if str(PROJECT_DIR) not in sys.path:
-                sys.path.insert(0, str(PROJECT_DIR))
-
-
-            def package_available(name: str) -> bool:
-                return importlib.util.find_spec(name) is not None
-
-
-            if AUTO_INSTALL and not package_available("farmlab"):
-                try:
-                    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-e", str(PROJECT_DIR)])
-                except Exception:
-                    subprocess.check_call(["uv", "pip", "install", "--python", sys.executable, "-e", str(PROJECT_DIR)])
-
-            print("PROJECT_DIR =", PROJECT_DIR)
-            print("DATA_DIR    =", DATA_DIR)
-            print("OUTPUT_DIR  =", OUTPUT_DIR)
-            print("AUTO_INSTALL =", AUTO_INSTALL)
-
-            if not DATA_DIR.exists():
-                raise FileNotFoundError(f"Diretorio de dados nao encontrado: {DATA_DIR}")
-            """
+            build_runtime_bootstrap_source(output_subdir="notebook_outputs")
         ),
         code_cell(
             """

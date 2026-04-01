@@ -1,4 +1,4 @@
-.venv/
+.venv*
 __pycache__/
 .pytest_cache/
 *.pyc
@@ -10,3 +10,5 @@ streamlit.err.log
 notebook_outputs/
 
 data/
+.monolithfarm.paths.json
+monolithfarm.paths.json

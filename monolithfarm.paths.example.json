@@ -1,0 +1,26 @@
+{
+  "default_profile": "local",
+  "profiles": {
+    "local": {
+      "notebook_mode": "jupyter",
+      "project_dir": ".",
+      "data_dir": "data",
+      "output_root": "notebook_outputs",
+      "auto_install": false
+    },
+    "colab_drive": {
+      "notebook_mode": "colab",
+      "project_dir": "/content/drive/My Drive/SEU_CAMINHO/Projeto-FarmLab",
+      "data_dir": "/content/drive/My Drive/SEU_CAMINHO/Projeto-FarmLab/data",
+      "output_root": "/content/drive/My Drive/SEU_CAMINHO/Projeto-FarmLab/notebook_outputs",
+      "auto_install": true
+    },
+    "colab_temp": {
+      "notebook_mode": "jupyter",
+      "project_dir": "/content/Projeto-FarmLab",
+      "data_dir": "/content/Projeto-FarmLab/data",
+      "output_root": "/content/Projeto-FarmLab/notebook_outputs",
+      "auto_install": true
+    }
+  }
+}
