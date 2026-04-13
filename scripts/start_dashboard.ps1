@@ -79,8 +79,8 @@ Ensure-Environment -PythonPath $python
 
 if ($Refresh -or -not (Test-Path $DbPath)) {
     Write-Host "Atualizando banco DuckDB..."
-    & $python -m farmlab.database --data-dir $DataDir --db-path $DbPath | Out-Host
+    & $python -m dashboard.database --data-dir $DataDir --db-path $DbPath | Out-Host
 }
 
 Write-Host "Abrindo dashboard em http://127.0.0.1:$Port"
-& $python -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port $Port
+& $python -m streamlit run dashboard/app.py --server.address 127.0.0.1 --server.port $Port

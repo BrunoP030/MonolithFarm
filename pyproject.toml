@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-monolithfarm-ingest = "farmlab.database:main"
+monolithfarm-ingest = "dashboard.database:main"
 
 [tool.setuptools.packages.find]
-include = ["farmlab*"]
+include = ["dashboard*", "farmlab*"]

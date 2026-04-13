@@ -49,8 +49,8 @@ fi
 
 if [[ "${REFRESH}" == "1" || ! -f "${DB_PATH}" ]]; then
   echo "Atualizando banco DuckDB..."
-  "${PYTHON_BIN}" -m farmlab.database --data-dir "${DATA_DIR}" --db-path "${DB_PATH}"
+  "${PYTHON_BIN}" -m dashboard.database --data-dir "${DATA_DIR}" --db-path "${DB_PATH}"
 fi
 
 echo "Abrindo dashboard em http://127.0.0.1:${PORT}"
-exec "${PYTHON_BIN}" -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port "${PORT}"
+exec "${PYTHON_BIN}" -m streamlit run dashboard/app.py --server.address 127.0.0.1 --server.port "${PORT}"

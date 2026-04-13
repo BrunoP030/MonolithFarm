@@ -8,8 +8,8 @@ from typing import Any
 
 import pandas as pd
 
-from farmlab.analysis import build_season_geometries
 from farmlab.io import (
+    build_season_geometries,
     discover_dataset_paths,
     load_layer_map,
     load_ndvi_metadata,

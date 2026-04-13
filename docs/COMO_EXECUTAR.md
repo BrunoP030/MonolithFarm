@@ -1,6 +1,9 @@
 # Como Executar o Projeto
 
-Guia objetivo para subir o MonolithFarm com dashboard, revisoes analiticas e notebooks Jupyter.
+Guia objetivo para subir o MonolithFarm separando claramente os dois fluxos do repositorio:
+
+- notebook analitico NDVI;
+- dashboard Streamlit.
 
 ## Pre-requisitos
 
@@ -42,6 +45,8 @@ uv pip install --python .venv/bin/python -e .
 
 ## Subir o Dashboard
 
+O dashboard usa a implementacao em `dashboard/` e nao participa do pipeline analitico completo do notebook.
+
 ### Windows
 
 ```powershell
@@ -74,35 +79,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start_dashboard.ps1 -Refresh 
 REFRESH=1 ./scripts/start_dashboard.sh data storage/monolithfarm.duckdb 8502
 ```
 
-## Rodar Tudo em Um Unico Notebook
+## Notebook Unico do Projeto
 
-Notebook principal: `notebooks/ndvi_master_analysis.ipynb`.
+Notebook principal: `notebooks/complete_ndvi_analysis.ipynb`.
 
-### Windows
+Esse e o unico notebook oficial do projeto. Os notebooks antigos por fases e o notebook `master` foram removidos para deixar a execucao e a leitura concentradas em um unico fluxo.
 
-```powershell
-uv pip install --python .\.venv\Scripts\python.exe jupyterlab ipykernel
-.\.venv\Scripts\python.exe .\scripts\generate_ndvi_master_notebook.py
-.\.venv\Scripts\python.exe -m jupyter lab notebooks\ndvi_master_analysis.ipynb
-```
-
-### Linux/macOS
-
-```bash
-uv pip install --python .venv/bin/python jupyterlab ipykernel
-.venv/bin/python scripts/generate_ndvi_master_notebook.py
-.venv/bin/python -m jupyter lab notebooks/ndvi_master_analysis.ipynb
-```
-
-O notebook mestre consolida:
-
-- inventario das areas;
-- fase 1 pareada;
-- fase 2 de deep dive de NDVI;
-- graficos Plotly inline;
-- galerias visuais das imagens NDVI;
-- outlook pre-colheita;
-- export dos artefatos finais.
+O notebook documenta o pipeline analitico em `farmlab/` e nao depende da implementacao do dashboard em `dashboard/`.
 
 ## Paths Ajustaveis sem Commit
 
@@ -164,37 +147,7 @@ Guia dedicado:
 
 - [COLAB_DRIVE.md](./COLAB_DRIVE.md)
 
-## Gerar as Revisoes sem Abrir o Notebook
-
-### Fase 1
-
-Linux/macOS:
-
-```bash
-.venv/bin/python scripts/generate_phase1_review.py --data-dir data --output-dir notebook_outputs
-```
-
-Windows:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\generate_phase1_review.py --data-dir data --output-dir notebook_outputs
-```
-
-### Fase 2
-
-Linux/macOS:
-
-```bash
-.venv/bin/python scripts/generate_phase2_ndvi_review.py --data-dir data --output-dir notebook_outputs/phase2_ndvi
-```
-
-Windows:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\generate_phase2_ndvi_review.py --data-dir data --output-dir notebook_outputs/phase2_ndvi
-```
-
-### Projeto Completo
+## Gerar a Revisao sem Abrir o Notebook
 
 Linux/macOS:
 
@@ -217,8 +170,8 @@ Fluxo manual com controle explicito das etapas.
 ```bash
 uv venv .venv
 uv pip install --python .venv/bin/python -e .
-.venv/bin/python -m farmlab.database --data-dir data --db-path storage/monolithfarm.duckdb
-.venv/bin/python -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8501
+.venv/bin/python -m dashboard.database --data-dir data --db-path storage/monolithfarm.duckdb
+.venv/bin/python -m streamlit run dashboard/app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
 ### Windows
@@ -226,8 +179,8 @@ uv pip install --python .venv/bin/python -e .
 ```powershell
 uv venv .venv
 uv pip install --python .\.venv\Scripts\python.exe -e .
-.\.venv\Scripts\python.exe -m farmlab.database --data-dir data --db-path storage/monolithfarm.duckdb
-.\.venv\Scripts\python.exe -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8501
+.\.venv\Scripts\python.exe -m dashboard.database --data-dir data --db-path storage/monolithfarm.duckdb
+.\.venv\Scripts\python.exe -m streamlit run dashboard/app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
 ## Validacao Rapida
@@ -294,6 +247,8 @@ Esses caminhos ja estao ignorados no `.gitignore`.
 - [../README.md](../README.md)
 - [../scripts/start_dashboard.ps1](../scripts/start_dashboard.ps1)
 - [../scripts/start_dashboard.sh](../scripts/start_dashboard.sh)
-- [../scripts/generate_ndvi_master_notebook.py](../scripts/generate_ndvi_master_notebook.py)
-- [../streamlit_app.py](../streamlit_app.py)
-- [../farmlab/database.py](../farmlab/database.py)
+- [../scripts/generate_complete_ndvi_notebook.py](../scripts/generate_complete_ndvi_notebook.py)
+- [../scripts/generate_complete_ndvi_review.py](../scripts/generate_complete_ndvi_review.py)
+- [../dashboard/app.py](../dashboard/app.py)
+- [../dashboard/database.py](../dashboard/database.py)
+- [../dashboard/workspace.py](../dashboard/workspace.py)

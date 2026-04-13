@@ -1,6 +1,9 @@
 # Checklist de Primeiro Uso na Faculdade
 
-Checklist rapido para reduzir erro de ambiente em maquina nova e deixar o projeto pronto para dashboard e notebooks.
+Checklist rapido para reduzir erro de ambiente em maquina nova e deixar o projeto pronto para os dois fluxos separados do repositorio:
+
+- dashboard Streamlit;
+- notebook analitico NDVI.
 
 ## 1) Conferencia Inicial
 
@@ -48,6 +51,8 @@ uv pip install --python .venv/bin/python -e .
 
 ## 4) Subir o Dashboard
 
+O dashboard usa a implementacao em `dashboard/`.
+
 Windows:
 
 ```powershell
@@ -86,7 +91,9 @@ uv pip install --python .venv/bin/python jupyterlab ipykernel
 .venv/bin/python -m jupyter lab notebooks/complete_ndvi_analysis.ipynb
 ```
 
-O notebook legado por fases permanece disponivel em `notebooks/ndvi_master_analysis.ipynb`.
+Esse e o unico notebook oficial do projeto. Os notebooks antigos por fases foram removidos para manter um unico fluxo de execucao e apresentacao.
+
+Esse notebook cobre o pipeline analitico em `farmlab/`. O dashboard e um subsistema separado.
 
 ## 6) Se os Dados Estiverem em Outro Caminho
 

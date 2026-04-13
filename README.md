@@ -8,7 +8,10 @@ Este repositorio materializa um MVP de ciencia de dados agricola para responder 
 
 - por que uma area apresentou melhor desempenho agronomico e produtivo do que outra na mesma safra?
 
-O projeto integra fontes heterogeneas (satelite, operacao, clima, solo e pragas), persiste em banco local DuckDB e disponibiliza leitura visual em Streamlit.
+O projeto integra fontes heterogeneas (satelite, operacao, clima, solo e pragas). Hoje ele tem dois fluxos separados:
+
+- fluxo analitico principal: notebook `complete_ndvi_analysis.ipynb` + pipeline NDVI em `farmlab/`;
+- fluxo de painel: dashboard Streamlit + workspace legado em `dashboard/`.
 
 ## Objetivo do Projeto
 
@@ -21,19 +24,34 @@ O objetivo e explicar diferencas de vigor vegetativo, produtividade e eficiencia
 
 ## Arquitetura da Solucao
 
-O sistema esta organizado em quatro camadas:
+O repositorio ficou separado em dois subsistemas independentes.
 
-1. ingestao: descoberta e leitura automatica dos arquivos do pacote `FarmLab`;
-2. tratamento: normalizacao, conversoes de tipos e enriquecimentos;
-3. persistencia: materializacao em `DuckDB`;
-4. visualizacao: painel analitico em `Streamlit`.
+### 1. Analise NDVI e Notebook
 
-Fluxo tecnico principal:
+Este e o fluxo principal do projeto e o unico usado para a analise completa, rastreavel e apresentavel:
 
+- [notebooks/complete_ndvi_analysis.ipynb](notebooks/complete_ndvi_analysis.ipynb)
 - [farmlab/io.py](farmlab/io.py)
+- [farmlab/pairwise.py](farmlab/pairwise.py)
+- [farmlab/ndvi_deepdive.py](farmlab/ndvi_deepdive.py)
+- [farmlab/ndvi_crispdm.py](farmlab/ndvi_crispdm.py)
+- [farmlab/complete_analysis.py](farmlab/complete_analysis.py)
+
+### 2. Dashboard Streamlit
+
+Este fluxo e separado do notebook e existe apenas para leitura interativa do painel:
+
+- [dashboard/app.py](dashboard/app.py)
+- [dashboard/workspace.py](dashboard/workspace.py)
+- [dashboard/database.py](dashboard/database.py)
+- [scripts/start_dashboard.ps1](scripts/start_dashboard.ps1)
+- [scripts/start_dashboard.sh](scripts/start_dashboard.sh)
+
+Wrappers de compatibilidade mantidos:
+
+- [streamlit_app.py](streamlit_app.py)
 - [farmlab/analysis.py](farmlab/analysis.py)
 - [farmlab/database.py](farmlab/database.py)
-- [streamlit_app.py](streamlit_app.py)
 
 ## Mapeamento do Ecossistema FarmLab
 
@@ -146,38 +164,17 @@ REFRESH=1 ./scripts/start_dashboard.sh data storage/monolithfarm.duckdb 8502
 - [docs/COMO_EXECUTAR.md](docs/COMO_EXECUTAR.md)
 - [docs/PRIMEIRO_USO_FACULDADE.md](docs/PRIMEIRO_USO_FACULDADE.md)
 - [docs/COLAB_DRIVE.md](docs/COLAB_DRIVE.md)
+- [docs/ARQUITETURA.md](docs/ARQUITETURA.md)
 
-## Notebook Mestre no Jupyter
+## Notebook Unico do Projeto
 
-O notebook unico para navegar por toda a analise atual e [ndvi_master_analysis.ipynb](notebooks/ndvi_master_analysis.ipynb).
+O notebook oficial e unico para navegacao, Colab e apresentacao do projeto e [complete_ndvi_analysis.ipynb](notebooks/complete_ndvi_analysis.ipynb).
 
-Esse notebook consolida:
+Ele documenta o fluxo analitico completo. O dashboard nao participa das decisoes, hipoteses e CSVs finais do pipeline NDVI.
 
-- fase 1 pareada;
-- fase 2 de deep dive em NDVI;
-- tabelas analiticas;
-- graficos Plotly inline;
-- galerias das imagens NDVI;
-- outlook pre-colheita;
-- gaps atuais da evidencia.
+Os notebooks antigos por fases e o notebook `master` foram removidos para evitar duplicacao e manter um unico fluxo de leitura e execucao.
 
-### Windows
-
-```powershell
-uv pip install --python .\.venv\Scripts\python.exe jupyterlab ipykernel
-.\.venv\Scripts\python.exe .\scripts\generate_ndvi_master_notebook.py
-.\.venv\Scripts\python.exe -m jupyter lab notebooks\ndvi_master_analysis.ipynb
-```
-
-### Linux/macOS
-
-```bash
-uv pip install --python .venv/bin/python jupyterlab ipykernel
-.venv/bin/python scripts/generate_ndvi_master_notebook.py
-.venv/bin/python -m jupyter lab notebooks/ndvi_master_analysis.ipynb
-```
-
-Os notebooks detectam automaticamente a raiz do projeto e usam `./data` por padrao. Se necessario, sobrescreva:
+O notebook detecta automaticamente a raiz do projeto e usa `./data` por padrao. Se necessario, sobrescreva:
 
 - `MONOLITHFARM_PROJECT_DIR`
 - `MONOLITHFARM_DATA_DIR`
@@ -239,89 +236,6 @@ Saidas principais:
 - `notebook_outputs/complete_ndvi/weekly_correlations.csv`
 - `notebook_outputs/complete_ndvi/review/review_summary.md`
 
-## Revisao e Graficos da Fase 1
-
-Para gerar os CSVs finais, o parecer textual e os graficos HTML da revisao:
-
-Linux/macOS:
-
-```bash
-.venv/bin/python scripts/generate_phase1_review.py --data-dir data --output-dir notebook_outputs
-```
-
-Windows:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\generate_phase1_review.py --data-dir data --output-dir notebook_outputs
-```
-
-Saidas principais:
-
-- `notebook_outputs/review/review_summary.md`
-- `notebook_outputs/review/ndvi_weekly_by_pair.html`
-- `notebook_outputs/review/harvest_yield_by_area.html`
-- `notebook_outputs/review/miip_pressure_by_area.html`
-- `notebook_outputs/review/ops_quality_by_area.html`
-- `notebook_outputs/review/weather_coverage_timeline.html`
-
-Notebook da fase 1:
-
-Linux/macOS:
-
-```bash
-uv pip install --python .venv/bin/python jupyterlab
-.venv/bin/python scripts/generate_phase1_notebook.py
-.venv/bin/python -m jupyter lab notebooks/phase1_ndvi_pairwise.ipynb
-```
-
-Windows:
-
-```powershell
-uv pip install --python .\.venv\Scripts\python.exe jupyterlab
-.\.venv\Scripts\python.exe .\scripts\generate_phase1_notebook.py
-.\.venv\Scripts\python.exe -m jupyter lab notebooks\phase1_ndvi_pairwise.ipynb
-```
-
-## Fase 2 - Deep Dive de NDVI
-
-Para gerar a revisao aprofundada de NDVI com eventos, outlook pre-colheita e graficos:
-
-Linux/macOS:
-
-```bash
-.venv/bin/python scripts/generate_phase2_ndvi_review.py --data-dir data --output-dir notebook_outputs/phase2_ndvi
-```
-
-Windows:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\generate_phase2_ndvi_review.py --data-dir data --output-dir notebook_outputs/phase2_ndvi
-```
-
-Saidas principais:
-
-- `notebook_outputs/phase2_ndvi/ndvi_phase_timeline.csv`
-- `notebook_outputs/phase2_ndvi/ndvi_events.csv`
-- `notebook_outputs/phase2_ndvi/ndvi_pair_diagnostics.csv`
-- `notebook_outputs/phase2_ndvi/ndvi_outlook.csv`
-- `notebook_outputs/phase2_ndvi/review/review_summary.md`
-
-Notebook da fase 2:
-
-Linux/macOS:
-
-```bash
-.venv/bin/python scripts/generate_phase2_ndvi_notebook.py
-.venv/bin/python -m jupyter lab notebooks/phase2_ndvi_deepdive.ipynb
-```
-
-Windows:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\generate_phase2_ndvi_notebook.py
-.\.venv\Scripts\python.exe -m jupyter lab notebooks\phase2_ndvi_deepdive.ipynb
-```
-
 ## Protecao de Dados e Artefatos Locais
 
 Os seguintes caminhos ja estao ignorados no Git e nao devem ser incluidos em commit:
@@ -335,10 +249,20 @@ Isso protege os dados privados do projeto e evita versionar saidas geradas local
 
 ## Estrutura Principal do Repositorio
 
-- [streamlit_app.py](streamlit_app.py): interface principal do painel
-- [farmlab/analysis.py](farmlab/analysis.py): regras analiticas e sintese dos dados
-- [farmlab/database.py](farmlab/database.py): persistencia e leitura do banco local
+### Pipeline analitico
+
+- [notebooks/complete_ndvi_analysis.ipynb](notebooks/complete_ndvi_analysis.ipynb): notebook oficial do projeto
 - [farmlab/io.py](farmlab/io.py): descoberta e ingestao dos arquivos brutos
+- [farmlab/pairwise.py](farmlab/pairwise.py): tratamento inicial, renomeacoes e integracao semanal
+- [farmlab/ndvi_deepdive.py](farmlab/ndvi_deepdive.py): flags, eventos, drivers e outlook
+- [farmlab/ndvi_crispdm.py](farmlab/ndvi_crispdm.py): auditoria, hipoteses e decisao
+- [farmlab/complete_analysis.py](farmlab/complete_analysis.py): estatistica final e export dos CSVs
+
+### Dashboard
+
+- [dashboard/app.py](dashboard/app.py): implementacao real do painel Streamlit
+- [dashboard/workspace.py](dashboard/workspace.py): workspace legado do painel
+- [dashboard/database.py](dashboard/database.py): persistencia do painel em DuckDB
 - [scripts/start_dashboard.ps1](scripts/start_dashboard.ps1): inicializacao assistida (Windows)
 - [scripts/start_dashboard.sh](scripts/start_dashboard.sh): inicializacao assistida (Linux/macOS)
 
