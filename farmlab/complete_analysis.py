@@ -12,7 +12,24 @@ from farmlab.ndvi_crispdm import CRISPDM_OUTPUT_TABLES, PAIR_EFFECT_SPECS, build
 from farmlab.pairwise import build_ndvi_weekly
 
 
+SUPPORT_OUTPUT_TABLES = [
+    "area_inventory",
+    "ndvi_clean",
+    "weather_daily",
+    "weather_weekly",
+    "ops_area_daily",
+    "miip_daily",
+    "pairwise_weekly_features",
+    "ops_support_daily",
+    "ops_support_weekly",
+    "ndvi_phase_timeline",
+    "ndvi_events",
+    "ndvi_pair_diagnostics",
+    "ndvi_outlook",
+]
+
 COMPLETE_OUTPUT_TABLES = [
+    *SUPPORT_OUTPUT_TABLES,
     *CRISPDM_OUTPUT_TABLES,
     "dataset_overview",
     "numeric_profiles",
