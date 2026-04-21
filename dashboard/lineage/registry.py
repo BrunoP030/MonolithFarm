@@ -1,0 +1,933 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+
+@dataclass(frozen=True)
+class TableSpec:
+    name: str
+    kind: str
+    module: str
+    function: str
+    file_path: str
+    description: str
+    inputs: list[str] = field(default_factory=list)
+    filters: list[str] = field(default_factory=list)
+    joins: list[str] = field(default_factory=list)
+    aggregations: list[str] = field(default_factory=list)
+    created_columns: list[str] = field(default_factory=list)
+    downstream_tables: list[str] = field(default_factory=list)
+    related_csvs: list[str] = field(default_factory=list)
+    related_hypotheses: list[str] = field(default_factory=list)
+    related_charts: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class CsvSpec:
+    name: str
+    module: str
+    function: str
+    file_path: str
+    description: str
+    dependencies: list[str] = field(default_factory=list)
+    related_hypotheses: list[str] = field(default_factory=list)
+    related_charts: list[str] = field(default_factory=list)
+    column_docs: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class FeatureSpec:
+    name: str
+    feature_type: str
+    definition: str
+    table_where_born: str
+    module: str
+    function: str
+    file_path: str
+    raw_sources: list[str] = field(default_factory=list)
+    source_columns: list[str] = field(default_factory=list)
+    transformation: str = ""
+    filters_involved: list[str] = field(default_factory=list)
+    appears_in_tables: list[str] = field(default_factory=list)
+    appears_in_csvs: list[str] = field(default_factory=list)
+    related_hypotheses: list[str] = field(default_factory=list)
+    related_charts: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class HypothesisSpec:
+    id: str
+    title: str
+    question: str
+    decision_rule: str
+    metrics: list[str]
+    tables: list[str]
+    csvs: list[str]
+    charts: list[str]
+    limitations: list[str]
+
+
+@dataclass(frozen=True)
+class ChartSpec:
+    key: str
+    title: str
+    dataframe_sources: list[str]
+    calculation_origin: str
+    chart_code: str
+    interpretation: str
+    related_hypotheses: list[str] = field(default_factory=list)
+
+
+INTERMEDIATE_TABLE_REGISTRY: dict[str, TableSpec] = {
+    "ndvi_clean": TableSpec(
+        name="ndvi_clean",
+        kind="intermediate",
+        module="farmlab.pairwise",
+        function="build_ndvi_clean",
+        file_path="farmlab/pairwise.py",
+        description="Primeira base NDVI realmente analítica do projeto. Remove cenas inválidas e traduz colunas brutas do OneSoil para nomes legíveis.",
+        inputs=["ndvi_metadata.csv", "area_metadata", "weather_daily"],
+        filters=["remove linhas com b1_valid_pixels <= 0", "normaliza date", "ordena por season_id e date"],
+        joins=["merge com area_metadata por season_id"],
+        aggregations=[],
+        created_columns=["week_start", "ndvi_mean", "ndvi_std", "soil_pct", "dense_veg_pct", "ndvi_delta", "ndvi_auc", "has_weather_coverage"],
+        downstream_tables=["ndvi_stats_by_area", "ndvi_outliers", "pairwise_weekly_features"],
+        related_csvs=["ndvi_stats_by_area.csv", "ndvi_outliers.csv"],
+        related_hypotheses=["H1", "H2", "H3", "H4"],
+        related_charts=["ndvi_weekly_by_area", "ndvi_mean_by_area", "ndvi_outliers"],
+    ),
+    "weather_daily": TableSpec(
+        name="weather_daily",
+        kind="intermediate",
+        module="farmlab.pairwise",
+        function="build_weather_daily",
+        file_path="farmlab/pairwise.py",
+        description="Série diária de clima a partir da Metos horária.",
+        inputs=["weather_hourly"],
+        filters=["converte timestamp", "agrega por date"],
+        joins=[],
+        aggregations=["soma chuva e evapotranspiração", "média radiação, temperatura, umidade e vento"],
+        created_columns=["water_balance_mm", "precipitation_mm_ma7", "water_balance_mm_ma14", "week_start"],
+        downstream_tables=["weather_weekly", "ndvi_clean", "pairwise_weekly_features"],
+        related_csvs=[],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["correlations"],
+    ),
+    "weather_weekly": TableSpec(
+        name="weather_weekly",
+        kind="intermediate",
+        module="farmlab.pairwise",
+        function="build_weather_weekly",
+        file_path="farmlab/pairwise.py",
+        description="Agregação semanal do clima usada para alinhar NDVI com contexto meteorológico.",
+        inputs=["weather_daily"],
+        filters=[],
+        joins=[],
+        aggregations=["agrega por week_start"],
+        created_columns=[
+            "precipitation_mm_week",
+            "evapotranspiration_mm_week",
+            "water_balance_mm_week",
+            "solar_radiation_w_m2_week",
+            "temp_avg_c_week",
+            "temp_max_c_week",
+            "temp_min_c_week",
+            "humidity_avg_pct_week",
+            "wind_avg_kmh_week",
+        ],
+        downstream_tables=["pairwise_weekly_features", "ndvi_phase_timeline"],
+        related_csvs=[],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["correlations"],
+    ),
+    "ops_area_daily": TableSpec(
+        name="ops_area_daily",
+        kind="intermediate",
+        module="farmlab.pairwise",
+        function="build_ops_area_daily",
+        file_path="farmlab/pairwise.py",
+        description="Consolidação diária das camadas operacionais do EKOS por área.",
+        inputs=["EKOS layers de plantio, colheita, adubação, sobreposição, velocidade, estado e parada"],
+        filters=["atribui geometrias a season_id"],
+        joins=["merge de vários resumos diários por season_id e date"],
+        aggregations=["agregação diária por área"],
+        created_columns=[
+            "planting_population_mean_ha",
+            "harvest_yield_mean_kg_ha",
+            "fert_dose_gap_abs_mean_kg_ha",
+            "overlap_area_pct_bbox",
+            "stop_duration_h_per_bbox_ha",
+        ],
+        downstream_tables=["pairwise_weekly_features", "data_audit"],
+        related_csvs=[],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["drivers_problem_weeks", "correlations"],
+    ),
+    "miip_daily": TableSpec(
+        name="miip_daily",
+        kind="intermediate",
+        module="farmlab.pairwise",
+        function="build_miip_daily",
+        file_path="farmlab/pairwise.py",
+        description="Consolidação diária de pragas e armadilhas por área.",
+        inputs=["traps_data.csv", "traps_list.csv", "pest_list.csv", "pest_details.csv", "traps_events.csv"],
+        filters=["atribui armadilhas a season_id por proximidade"],
+        joins=["merge trap_daily + event_daily + area_metadata"],
+        aggregations=["agregação diária por área"],
+        created_columns=["avg_pest_count", "total_pest_count", "alert_hits", "control_hits", "damage_hits"],
+        downstream_tables=["pairwise_weekly_features", "data_audit"],
+        related_csvs=[],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["drivers_problem_weeks", "correlations"],
+    ),
+    "pairwise_weekly_features": TableSpec(
+        name="pairwise_weekly_features",
+        kind="intermediate",
+        module="farmlab.pairwise",
+        function="build_pairwise_weekly_features",
+        file_path="farmlab/pairwise.py",
+        description="Feature store semanal que integra NDVI, clima, operação e MIIP.",
+        inputs=["ndvi_clean", "weather_weekly", "ops_area_daily", "miip_daily", "area_metadata"],
+        filters=["ordena por comparison_pair, area_label e week_start"],
+        joins=["merge de ndvi_weekly + ops_weekly + miip_weekly + area_metadata + weather_weekly"],
+        aggregations=["agregação semanal do NDVI, operação e MIIP"],
+        created_columns=["pair_ndvi_gap_4_0_minus_conv", "pair_harvest_gap_4_0_minus_conv", "pair_pest_gap_4_0_minus_conv"],
+        downstream_tables=["ndvi_phase_timeline"],
+        related_csvs=[],
+        related_hypotheses=["H1", "H2", "H3", "H4"],
+        related_charts=["ndvi_weekly_by_area", "gap_weekly"],
+    ),
+    "ops_support_daily": TableSpec(
+        name="ops_support_daily",
+        kind="intermediate",
+        module="farmlab.ndvi_deepdive",
+        function="build_ops_support_daily",
+        file_path="farmlab/ndvi_deepdive.py",
+        description="Base diária de telemetria e suporte operacional para explicar eventos do NDVI.",
+        inputs=["layer_map_alarm", "layer_map_parameterized_alert", "layer_map_telemetry_communication", "layer_map_engine_rotation", "layer_map_engine_temperature", "layer_map_fuel_consumption"],
+        filters=["atribui geometrias a season_id", "normaliza date"],
+        joins=["merge de múltiplos resumos diários operacionais"],
+        aggregations=["agregação diária por área"],
+        created_columns=["alarm_events", "invalid_telemetry_share", "engine_idle_share", "engine_temp_max_c", "fuel_zero_share"],
+        downstream_tables=["ops_support_weekly", "ndvi_phase_timeline"],
+        related_csvs=[],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["drivers_problem_weeks"],
+    ),
+    "ops_support_weekly": TableSpec(
+        name="ops_support_weekly",
+        kind="intermediate",
+        module="farmlab.ndvi_deepdive",
+        function="build_ops_support_weekly",
+        file_path="farmlab/ndvi_deepdive.py",
+        description="Agregação semanal da telemetria de suporte operacional.",
+        inputs=["ops_support_daily"],
+        filters=[],
+        joins=[],
+        aggregations=["agregação por season_id e week_start"],
+        created_columns=["alarm_events_week", "invalid_telemetry_share_week", "engine_idle_share_week", "engine_temp_max_c_week", "fuel_zero_share_week"],
+        downstream_tables=["ndvi_phase_timeline"],
+        related_csvs=[],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["drivers_problem_weeks"],
+    ),
+    "ndvi_phase_timeline": TableSpec(
+        name="ndvi_phase_timeline",
+        kind="intermediate",
+        module="farmlab.ndvi_deepdive",
+        function="build_ndvi_phase_timeline",
+        file_path="farmlab/ndvi_deepdive.py",
+        description="Timeline semanal enriquecida com fase, eventos e drivers; é a tabela central da interpretação.",
+        inputs=["pairwise_weekly_features", "ops_support_weekly"],
+        filters=["ordena por comparison_pair, area_label e week_start"],
+        joins=["merge com ops_support_weekly por season_id e week_start"],
+        aggregations=[],
+        created_columns=[
+            "ndvi_norm_week",
+            "peak_week_start",
+            "weeks_from_peak",
+            "major_drop_flag",
+            "low_vigor_flag",
+            "high_soil_flag",
+            "weather_stress_flag",
+            "pest_risk_flag",
+            "fert_risk_flag",
+            "overlap_risk_flag",
+            "stop_risk_flag",
+            "telemetry_risk_flag",
+            "alert_risk_flag",
+            "engine_risk_flag",
+            "ops_risk_flag",
+            "risk_flag_count",
+            "phase",
+            "event_type",
+            "primary_driver",
+            "secondary_driver",
+            "drivers_summary",
+            "story_sentence",
+        ],
+        downstream_tables=["ndvi_events", "ndvi_pair_diagnostics", "ndvi_outlook", "pair_effect_tests", "event_driver_lift", "transition_model_frame", "pair_weekly_gaps"],
+        related_csvs=["pair_weekly_gaps.csv", "pair_effect_tests.csv", "event_driver_lift.csv", "transition_model_frame.csv"],
+        related_hypotheses=["H1", "H2", "H3", "H4"],
+        related_charts=["ndvi_weekly_by_area", "gap_weekly", "drivers_problem_weeks", "outliers_ndvi"],
+    ),
+    "ndvi_events": TableSpec(
+        name="ndvi_events",
+        kind="intermediate",
+        module="farmlab.ndvi_deepdive",
+        function="build_ndvi_events",
+        file_path="farmlab/ndvi_deepdive.py",
+        description="Subconjunto de eventos relevantes do NDVI para leitura visual e narrativa.",
+        inputs=["ndvi_phase_timeline"],
+        filters=["mantém apenas linhas com event_type notna"],
+        joins=[],
+        aggregations=[],
+        created_columns=[],
+        downstream_tables=[],
+        related_csvs=[],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["ndvi_weekly_by_area"],
+    ),
+    "ndvi_pair_diagnostics": TableSpec(
+        name="ndvi_pair_diagnostics",
+        kind="intermediate",
+        module="farmlab.ndvi_deepdive",
+        function="build_ndvi_pair_diagnostics",
+        file_path="farmlab/ndvi_deepdive.py",
+        description="Diagnóstico sintético da trajetória por par, usado no outlook e na decisão final.",
+        inputs=["ndvi_phase_timeline", "area_inventory", "hypothesis_matrix"],
+        filters=[],
+        joins=[],
+        aggregations=["resume evidências por comparison_pair"],
+        created_columns=["trajectory_evidence_strength", "trajectory_winner", "supports_4_0", "supports_convencional", "ndvi_interpretation", "known_gaps"],
+        downstream_tables=["ndvi_outlook", "final_hypothesis_register", "decision_summary"],
+        related_csvs=["final_hypothesis_register.csv", "decision_summary.csv"],
+        related_hypotheses=["H4"],
+        related_charts=["hypothesis_summary"],
+    ),
+    "ndvi_outlook": TableSpec(
+        name="ndvi_outlook",
+        kind="intermediate",
+        module="farmlab.ndvi_deepdive",
+        function="build_ndvi_outlook",
+        file_path="farmlab/ndvi_deepdive.py",
+        description="Leitura final da trajetória pré-colheita por área.",
+        inputs=["ndvi_phase_timeline", "ndvi_pair_diagnostics"],
+        filters=[],
+        joins=[],
+        aggregations=["resume risco, fase e score final por área"],
+        created_columns=["trajectory_score", "outlook_band", "expected_vs_pair", "top_risks", "expected_harvest_note", "recommended_actions", "pair_context"],
+        downstream_tables=["final_hypothesis_register", "decision_summary"],
+        related_csvs=["final_hypothesis_register.csv", "decision_summary.csv"],
+        related_hypotheses=["H4"],
+        related_charts=["outlook_pre_harvest", "hypothesis_summary"],
+    ),
+}
+
+
+CSV_REGISTRY: dict[str, CsvSpec] = {
+    "dataset_overview.csv": CsvSpec(
+        name="dataset_overview.csv",
+        module="farmlab.complete_analysis",
+        function="build_dataset_overview",
+        file_path="farmlab/complete_analysis.py",
+        description="Inventário técnico dos datasets do workspace final.",
+        dependencies=["workspace completo"],
+        column_docs={
+            "dataset": "nome da tabela do workspace",
+            "rows": "quantidade de linhas",
+            "columns": "quantidade de colunas",
+            "numeric_columns": "número de colunas numéricas ou booleanas",
+            "null_cells": "total de células nulas",
+            "null_ratio": "fração de células nulas",
+            "date_start": "menor data observada",
+            "date_end": "maior data observada",
+        },
+    ),
+    "ndvi_stats_by_area.csv": CsvSpec(
+        name="ndvi_stats_by_area.csv",
+        module="farmlab.complete_analysis",
+        function="build_ndvi_stats_by_area",
+        file_path="farmlab/complete_analysis.py",
+        description="Resumo estatístico do NDVI por área.",
+        dependencies=["ndvi_clean"],
+        related_charts=["ndvi_mean_by_area"],
+        column_docs={
+            "area_label": "nome da área de negócio",
+            "comparison_pair": "par comparado: grão ou silagem",
+            "images_valid": "número de cenas válidas",
+            "mean": "média do ndvi_mean da área",
+            "max": "pico de NDVI da área",
+            "soil_pct_mean": "média de solo exposto",
+            "dense_veg_pct_mean": "média de vegetação densa",
+        },
+    ),
+    "ndvi_outliers.csv": CsvSpec(
+        name="ndvi_outliers.csv",
+        module="farmlab.complete_analysis",
+        function="build_ndvi_outliers",
+        file_path="farmlab/complete_analysis.py",
+        description="Cenas NDVI fora do padrão da própria série.",
+        dependencies=["ndvi_clean"],
+        related_charts=["outliers_ndvi"],
+        column_docs={
+            "date": "data da cena",
+            "area_label": "área de negócio",
+            "ndvi_mean": "NDVI médio da cena",
+            "ndvi_zscore": "z-score clássico dentro da área",
+            "ndvi_robust_zscore": "z-score robusto via mediana e MAD",
+            "outlier_flag": "marca se a cena foi considerada outlier",
+        },
+    ),
+    "pair_weekly_gaps.csv": CsvSpec(
+        name="pair_weekly_gaps.csv",
+        module="farmlab.complete_analysis",
+        function="build_pair_weekly_gaps",
+        file_path="farmlab/complete_analysis.py",
+        description="Gap semanal 4.0 − convencional por par.",
+        dependencies=["ndvi_phase_timeline"],
+        related_hypotheses=["H1", "H2"],
+        related_charts=["gap_weekly"],
+        column_docs={
+            "week_start": "início da semana comparada",
+            "comparison_pair": "par grão ou silagem",
+            "tech_area_label": "área 4.0 no par",
+            "conv_area_label": "área convencional no par",
+            "gap_ndvi_mean_week_4_0_minus_convencional": "diferença semanal de NDVI médio entre 4.0 e convencional",
+        },
+    ),
+    "pair_effect_tests.csv": CsvSpec(
+        name="pair_effect_tests.csv",
+        module="farmlab.ndvi_crispdm",
+        function="build_pair_effect_tests",
+        file_path="farmlab/ndvi_crispdm.py",
+        description="Tabela principal de efeito pareado do projeto.",
+        dependencies=["ndvi_phase_timeline"],
+        related_hypotheses=["H1", "H2"],
+        related_charts=["hypothesis_h1_effect", "hypothesis_h2_problem_rates"],
+        column_docs={
+            "metric_label": "métrica testada",
+            "weeks_compared": "semanas usadas no teste",
+            "advantage_4_0": "efeito médio 4.0 − convencional",
+            "ci_low": "limite inferior do IC95%",
+            "ci_high": "limite superior do IC95%",
+            "p_value": "evidência estatística contra ausência de diferença",
+            "paired_effect_size": "tamanho de efeito padronizado",
+            "winner": "lado favorecido pela métrica",
+            "evidence_level": "classificação qualitativa da evidência",
+        },
+    ),
+    "pair_classic_tests.csv": CsvSpec(
+        name="pair_classic_tests.csv",
+        module="farmlab.complete_analysis",
+        function="build_pair_classic_tests",
+        file_path="farmlab/complete_analysis.py",
+        description="Validação estatística clássica dos gaps semanais.",
+        dependencies=["pair_weekly_gaps"],
+        related_hypotheses=["H1", "H2"],
+        related_charts=["gap_weekly"],
+        column_docs={
+            "metric_label": "métrica testada",
+            "mean_favorable_gap_4_0": "gap orientado para favorecer o 4.0 quando positivo",
+            "recommended_test": "teste estatístico recomendado",
+            "recommended_p_value": "p-valor recomendado",
+            "paired_effect_size_dz": "tamanho de efeito dz",
+            "favors": "lado favorecido pela métrica",
+        },
+    ),
+    "weekly_correlations.csv": CsvSpec(
+        name="weekly_correlations.csv",
+        module="farmlab.complete_analysis",
+        function="build_weekly_correlations",
+        file_path="farmlab/complete_analysis.py",
+        description="Correlações semanais entre features e NDVI/variação futura do NDVI.",
+        dependencies=["transition_model_frame"],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["correlations"],
+        column_docs={
+            "analysis_target": "alvo analisado",
+            "feature": "feature comparada com o alvo",
+            "pearson_r": "correlação de Pearson",
+            "spearman_rho": "correlação de Spearman",
+            "strongest_abs_correlation": "maior correlação absoluta entre as duas medidas",
+            "direction": "sinal dominante da relação",
+        },
+    ),
+    "event_driver_lift.csv": CsvSpec(
+        name="event_driver_lift.csv",
+        module="farmlab.ndvi_crispdm",
+        function="build_event_driver_lift",
+        file_path="farmlab/ndvi_crispdm.py",
+        description="Drivers sobre-representados nas semanas problema.",
+        dependencies=["ndvi_phase_timeline"],
+        related_hypotheses=["H3"],
+        related_charts=["drivers_problem_weeks"],
+        column_docs={
+            "driver": "driver observado",
+            "problem_weeks": "número de semanas problema no par",
+            "problem_rate": "frequência do driver nas semanas problema",
+            "baseline_rate": "frequência do driver fora das semanas problema",
+            "delta_pp": "diferença em pontos percentuais",
+            "lift_ratio": "multiplicador de frequência problema / baseline",
+            "evidence_level": "força qualitativa da evidência",
+        },
+    ),
+    "final_hypothesis_register.csv": CsvSpec(
+        name="final_hypothesis_register.csv",
+        module="farmlab.ndvi_crispdm",
+        function="build_final_hypothesis_register",
+        file_path="farmlab/ndvi_crispdm.py",
+        description="Fechamento oficial das hipóteses H1–H4 por par.",
+        dependencies=["pair_effect_tests", "event_driver_lift", "ndvi_outlook", "ndvi_pair_diagnostics", "deep_dive_gaps"],
+        related_hypotheses=["H1", "H2", "H3", "H4"],
+        related_charts=["hypothesis_summary"],
+        column_docs={
+            "comparison_pair": "par em avaliação",
+            "hypothesis_id": "hipótese H1–H4",
+            "hypothesis": "enunciado da hipótese",
+            "status": "suportada, nao_suportada ou inconclusiva",
+            "proof_basis": "evidência principal usada na decisão",
+            "known_limits": "limitações que impedem leitura mais forte",
+        },
+    ),
+    "decision_summary.csv": CsvSpec(
+        name="decision_summary.csv",
+        module="farmlab.ndvi_crispdm",
+        function="build_decision_summary",
+        file_path="farmlab/ndvi_crispdm.py",
+        description="Mensagem executiva final por par.",
+        dependencies=["pair_effect_tests", "event_driver_lift", "final_hypothesis_register", "ndvi_outlook", "ndvi_pair_diagnostics"],
+        related_hypotheses=["H1", "H2", "H3", "H4"],
+        related_charts=["hypothesis_summary"],
+        column_docs={
+            "comparison_pair": "par avaliado",
+            "temporal_winner": "quem lidera a leitura temporal sintética",
+            "ndvi_effect_direction": "direção do efeito do NDVI",
+            "top_problem_driver": "driver dominante do par",
+            "decision_message": "mensagem final consolidada",
+            "next_step": "próxima ação recomendada",
+        },
+    ),
+}
+
+
+FEATURE_REGISTRY: dict[str, FeatureSpec] = {
+    "ndvi_mean": FeatureSpec(
+        name="ndvi_mean",
+        feature_type="derivada",
+        definition="NDVI médio da cena válida.",
+        table_where_born="ndvi_clean",
+        module="farmlab.pairwise",
+        function="build_ndvi_clean",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["b1_mean"],
+        transformation="renomeação direta: b1_mean -> ndvi_mean",
+        filters_involved=["somente linhas com b1_valid_pixels > 0"],
+        appears_in_tables=["ndvi_clean", "ndvi_outliers", "ndvi_stats_by_area"],
+        appears_in_csvs=["ndvi_stats_by_area.csv", "ndvi_outliers.csv"],
+        related_hypotheses=["H1"],
+        related_charts=["ndvi_weekly_by_area", "ndvi_mean_by_area", "outliers_ndvi"],
+    ),
+    "ndvi_std": FeatureSpec(
+        name="ndvi_std",
+        feature_type="derivada",
+        definition="Dispersão do NDVI dentro da cena.",
+        table_where_born="ndvi_clean",
+        module="farmlab.pairwise",
+        function="build_ndvi_clean",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["b1_std"],
+        transformation="renomeação direta: b1_std -> ndvi_std",
+        filters_involved=["somente linhas com b1_valid_pixels > 0"],
+        appears_in_tables=["ndvi_clean"],
+        appears_in_csvs=[],
+        related_hypotheses=[],
+        related_charts=[],
+    ),
+    "soil_pct": FeatureSpec(
+        name="soil_pct",
+        feature_type="derivada",
+        definition="Percentual de solo exposto observado na cena.",
+        table_where_born="ndvi_clean",
+        module="farmlab.pairwise",
+        function="build_ndvi_clean",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["b1_pct_solo"],
+        transformation="renomeação direta: b1_pct_solo -> soil_pct",
+        filters_involved=["somente linhas com b1_valid_pixels > 0"],
+        appears_in_tables=["ndvi_clean", "pairwise_weekly_features", "ndvi_phase_timeline"],
+        appears_in_csvs=["ndvi_stats_by_area.csv"],
+        related_hypotheses=["H3"],
+        related_charts=["drivers_problem_weeks"],
+    ),
+    "dense_veg_pct": FeatureSpec(
+        name="dense_veg_pct",
+        feature_type="derivada",
+        definition="Percentual de vegetação densa na cena.",
+        table_where_born="ndvi_clean",
+        module="farmlab.pairwise",
+        function="build_ndvi_clean",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["b1_pct_veg_densa"],
+        transformation="renomeação direta: b1_pct_veg_densa -> dense_veg_pct",
+        filters_involved=["somente linhas com b1_valid_pixels > 0"],
+        appears_in_tables=["ndvi_clean", "pairwise_weekly_features"],
+        appears_in_csvs=["ndvi_stats_by_area.csv"],
+        related_hypotheses=["H1"],
+        related_charts=["ndvi_weekly_by_area"],
+    ),
+    "ndvi_delta": FeatureSpec(
+        name="ndvi_delta",
+        feature_type="derivada",
+        definition="Variação do NDVI entre a cena atual e a cena anterior da mesma área.",
+        table_where_born="ndvi_clean",
+        module="farmlab.pairwise",
+        function="build_ndvi_clean",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["ndvi_mean", "date"],
+        transformation="diff por season_id ordenado por date",
+        filters_involved=["somente linhas com b1_valid_pixels > 0"],
+        appears_in_tables=["ndvi_clean"],
+        appears_in_csvs=[],
+        related_hypotheses=[],
+        related_charts=["outliers_ndvi"],
+    ),
+    "ndvi_auc": FeatureSpec(
+        name="ndvi_auc",
+        feature_type="score",
+        definition="Área acumulada sob a curva do NDVI ao longo do ciclo por área.",
+        table_where_born="ndvi_clean",
+        module="farmlab.pairwise",
+        function="build_ndvi_clean",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["ndvi_mean", "date"],
+        transformation="cálculo acumulado da área sob a curva por season_id",
+        filters_involved=["somente linhas com b1_valid_pixels > 0"],
+        appears_in_tables=["ndvi_clean", "pairwise_weekly_features"],
+        appears_in_csvs=["pair_effect_tests.csv"],
+        related_hypotheses=["H1"],
+        related_charts=["hypothesis_h1_effect"],
+    ),
+    "soil_pct_week": FeatureSpec(
+        name="soil_pct_week",
+        feature_type="agregada",
+        definition="Solo exposto médio da semana.",
+        table_where_born="pairwise_weekly_features",
+        module="farmlab.pairwise",
+        function="build_ndvi_weekly",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["soil_pct"],
+        transformation="média semanal por season_id e week_start",
+        filters_involved=["herda filtro de b1_valid_pixels > 0"],
+        appears_in_tables=["pairwise_weekly_features", "ndvi_phase_timeline", "transition_model_frame"],
+        appears_in_csvs=["weekly_correlations.csv"],
+        related_hypotheses=["H3", "H4"],
+        related_charts=["drivers_problem_weeks", "correlations"],
+    ),
+    "ndvi_mean_week": FeatureSpec(
+        name="ndvi_mean_week",
+        feature_type="agregada",
+        definition="NDVI médio semanal por área.",
+        table_where_born="pairwise_weekly_features",
+        module="farmlab.pairwise",
+        function="build_ndvi_weekly",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["ndvi_mean"],
+        transformation="média semanal por season_id e week_start",
+        filters_involved=["herda filtro de b1_valid_pixels > 0"],
+        appears_in_tables=["pairwise_weekly_features", "ndvi_phase_timeline", "transition_model_frame"],
+        appears_in_csvs=["pair_weekly_gaps.csv", "pair_effect_tests.csv", "pair_classic_tests.csv"],
+        related_hypotheses=["H1"],
+        related_charts=["ndvi_weekly_by_area", "gap_weekly", "hypothesis_h1_effect"],
+    ),
+    "ndvi_delta_week": FeatureSpec(
+        name="ndvi_delta_week",
+        feature_type="derivada",
+        definition="Variação semanal do NDVI médio da área.",
+        table_where_born="pairwise_weekly_features",
+        module="farmlab.pairwise",
+        function="build_ndvi_weekly",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["ndvi_mean_week"],
+        transformation="diff semanal por season_id",
+        filters_involved=["herda filtro de b1_valid_pixels > 0"],
+        appears_in_tables=["pairwise_weekly_features", "ndvi_phase_timeline", "transition_model_frame"],
+        appears_in_csvs=["transition_model_frame.csv"],
+        related_hypotheses=["H2", "H4"],
+        related_charts=["ndvi_weekly_by_area", "outlook_pre_harvest"],
+    ),
+    "ndvi_auc_week": FeatureSpec(
+        name="ndvi_auc_week",
+        feature_type="agregada",
+        definition="Área acumulada sob a curva do NDVI até a semana.",
+        table_where_born="pairwise_weekly_features",
+        module="farmlab.pairwise",
+        function="build_ndvi_weekly",
+        file_path="farmlab/pairwise.py",
+        raw_sources=["data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv"],
+        source_columns=["ndvi_auc"],
+        transformation="máximo acumulado da semana",
+        filters_involved=["herda filtro de b1_valid_pixels > 0"],
+        appears_in_tables=["pairwise_weekly_features", "ndvi_phase_timeline"],
+        appears_in_csvs=["pair_effect_tests.csv"],
+        related_hypotheses=["H1"],
+        related_charts=["hypothesis_h1_effect"],
+    ),
+}
+
+# Complete the repetitive weekly flags with shared metadata.
+for _name, _source_col, _label, _related_h in [
+    ("low_vigor_flag", "ndvi_norm_week", "ndvi_norm_week <= 0.35", ["H2", "H4"]),
+    ("major_drop_flag", "ndvi_delta_week", "ndvi_delta_week <= -0.08", ["H2", "H4"]),
+    ("high_soil_flag", "soil_pct_week", "soil_pct_week >= quantil de solo exposto", ["H3", "H4"]),
+    ("weather_stress_flag", "water_balance_mm_week", "balanço hídrico semanal em estresse", ["H3", "H4"]),
+    ("pest_risk_flag", "avg_pest_count_week + hits de alerta/dano", "risco de praga semanal acima do limiar", ["H2", "H3", "H4"]),
+    ("fert_risk_flag", "fert_dose_gap_abs_mean_kg_ha_week", "gap de dose acima do limiar", ["H3", "H4"]),
+    ("overlap_risk_flag", "overlap_area_pct_bbox_week", "sobreposição acima do limiar", ["H3", "H4"]),
+    ("stop_risk_flag", "stop_duration_h_per_bbox_ha_week", "tempo parado acima do limiar", ["H3", "H4"]),
+    ("telemetry_risk_flag", "invalid_telemetry_share_week", "falha de telemetria acima do limiar", ["H3", "H4"]),
+    ("alert_risk_flag", "alarm_events_week + param_alert_events_week", "existência de alertas de máquina", ["H3", "H4"]),
+    ("engine_risk_flag", "engine_temp_max_c_week + engine_idle_share_week + fuel_zero_share_week", "sinais de risco de máquina", ["H3", "H4"]),
+    ("ops_risk_flag", "fert/overlap/stop/telemetry/alert/engine flags", "qualquer risco operacional relevante", ["H2", "H3", "H4"]),
+    ("risk_flag_count", "todas as flags de risco", "soma das flags de risco da semana", ["H3", "H4"]),
+]:
+    FEATURE_REGISTRY[_name] = FeatureSpec(
+        name=_name,
+        feature_type="flag" if _name != "risk_flag_count" else "score",
+        definition=f"Feature de risco semanal: {_name}.",
+        table_where_born="ndvi_phase_timeline",
+        module="farmlab.ndvi_deepdive",
+        function="build_ndvi_phase_timeline",
+        file_path="farmlab/ndvi_deepdive.py",
+        raw_sources=[
+            "data/OneSoil - Imagens de Satélite/CSV/ndvi_metadata.csv",
+            "data/Metos - Estação Meteorológica/CSV/*.csv",
+            "data/EKOS - Telemetria e Armadilhas Eletrônicas/CSV/Layers/*.csv",
+            "data/EKOS - Telemetria e Armadilhas Eletrônicas/CSV/Pest/*.csv",
+        ],
+        source_columns=[_source_col],
+        transformation=_label,
+        filters_involved=["aplicada na timeline semanal após integração completa"],
+        appears_in_tables=["ndvi_phase_timeline", "transition_model_frame"],
+        appears_in_csvs=["pair_effect_tests.csv" if _name in {"low_vigor_flag", "major_drop_flag"} else "event_driver_lift.csv", "weekly_correlations.csv"],
+        related_hypotheses=_related_h,
+        related_charts=["drivers_problem_weeks", "hypothesis_h2_problem_rates", "correlations"],
+    )
+
+
+HYPOTHESIS_REGISTRY: dict[str, HypothesisSpec] = {
+    "H1": HypothesisSpec(
+        id="H1",
+        title="4.0 sustenta maior nível temporal de NDVI no par",
+        question="Ao longo das semanas, o 4.0 ficou acima do convencional no NDVI médio e no vigor acumulado?",
+        decision_rule="Ler pair_effect_tests principalmente para ndvi_mean_week; vantagem_4_0 > 0 com evidência consistente favorece 4.0.",
+        metrics=["ndvi_mean_week", "ndvi_auc_week"],
+        tables=["ndvi_phase_timeline", "pair_weekly_gaps", "pair_effect_tests", "pair_classic_tests"],
+        csvs=["pair_weekly_gaps.csv", "pair_effect_tests.csv", "pair_classic_tests.csv", "final_hypothesis_register.csv"],
+        charts=["ndvi_weekly_by_area", "gap_weekly", "hypothesis_h1_effect"],
+        limitations=["Não prova causalidade.", "Depende da cobertura semanal válida do NDVI."],
+    ),
+    "H2": HypothesisSpec(
+        id="H2",
+        title="4.0 reduz semanas de problema no NDVI",
+        question="O 4.0 teve menos semanas de baixo vigor e menos quedas relevantes do que o convencional?",
+        decision_rule="Comparar low_vigor_flag e major_drop_flag no pair_effect_tests; sinais fracos ou contraditórios deixam a hipótese inconclusiva.",
+        metrics=["low_vigor_flag", "major_drop_flag"],
+        tables=["ndvi_phase_timeline", "pair_effect_tests"],
+        csvs=["pair_effect_tests.csv", "final_hypothesis_register.csv"],
+        charts=["hypothesis_h2_problem_rates"],
+        limitations=["Flags usam limiares operacionais do projeto.", "Resultado depende da estabilidade da série semanal."],
+    ),
+    "H3": HypothesisSpec(
+        id="H3",
+        title="As semanas problema apresentam drivers identificáveis",
+        question="Os eventos ruins do NDVI aparecem associados a solo, clima, pragas ou operação de forma observável?",
+        decision_rule="Ler event_driver_lift; delta_pp e lift altos com evidence_level robusto suportam a hipótese.",
+        metrics=["delta_pp", "lift_ratio", "evidence_level"],
+        tables=["ndvi_phase_timeline", "event_driver_lift"],
+        csvs=["event_driver_lift.csv", "final_hypothesis_register.csv", "decision_summary.csv"],
+        charts=["drivers_problem_weeks"],
+        limitations=["Drivers são fatores associados, não prova causal fechada.", "Qualidade da atribuição espacial e de cobertura impacta a leitura."],
+    ),
+    "H4": HypothesisSpec(
+        id="H4",
+        title="O outlook pré-colheita favorece o 4.0 dentro do par",
+        question="A trajetória recente e os riscos acumulados indicam que o 4.0 chega melhor ao fim do ciclo?",
+        decision_rule="Ler ndvi_outlook e ndvi_pair_diagnostics; trajectory_score e expected_vs_pair orientam a decisão final.",
+        metrics=["trajectory_score", "expected_vs_pair", "trajectory_winner"],
+        tables=["ndvi_outlook", "ndvi_pair_diagnostics"],
+        csvs=["final_hypothesis_register.csv", "decision_summary.csv"],
+        charts=["outlook_pre_harvest", "hypothesis_summary"],
+        limitations=["É leitura de outlook, não produtividade final.", "Pode divergir do vencedor temporal do NDVI médio."],
+    ),
+}
+
+
+CHART_REGISTRY: dict[str, ChartSpec] = {
+    "ndvi_weekly_by_area": ChartSpec(
+        key="ndvi_weekly_by_area",
+        title="NDVI médio semanal por área e por par",
+        dataframe_sources=["ndvi_phase_timeline"],
+        calculation_origin="Usa ndvi_mean_week por area_label e comparison_pair ao longo de week_start.",
+        chart_code="""fig = px.line(ndvi_phase_timeline.sort_values('week_start'), x='week_start', y='ndvi_mean_week', color='area_label', facet_row='comparison_pair', markers=True)""",
+        interpretation="Mostra a trajetória semanal do vigor. Serve para ver quem sustentou NDVI maior ao longo do tempo dentro de cada par.",
+        related_hypotheses=["H1", "H4"],
+    ),
+    "gap_weekly": ChartSpec(
+        key="gap_weekly",
+        title="Gap semanal 4.0 − convencional",
+        dataframe_sources=["pair_weekly_gaps.csv"],
+        calculation_origin="Usa gap_ndvi_mean_week_4_0_minus_convencional por comparison_pair e week_start.",
+        chart_code="""fig = px.line(pair_weekly_gaps, x='week_start', y='gap_ndvi_mean_week_4_0_minus_convencional', color='comparison_pair', markers=True)""",
+        interpretation="Se a curva fica acima de zero, o 4.0 está acima do convencional naquela semana. É a forma mais direta de enxergar H1 no tempo.",
+        related_hypotheses=["H1", "H2"],
+    ),
+    "ndvi_mean_by_area": ChartSpec(
+        key="ndvi_mean_by_area",
+        title="NDVI médio consolidado por área",
+        dataframe_sources=["ndvi_stats_by_area.csv"],
+        calculation_origin="Usa a coluna mean de ndvi_stats_by_area ordenada por área.",
+        chart_code="""fig = px.bar(ndvi_stats_by_area, x='area_label', y='mean', color='comparison_pair')""",
+        interpretation="Resume quem teve NDVI médio maior no ciclo, sem mostrar a dinâmica temporal.",
+        related_hypotheses=["H1"],
+    ),
+    "outliers_ndvi": ChartSpec(
+        key="outliers_ndvi",
+        title="Outliers de NDVI",
+        dataframe_sources=["ndvi_outliers.csv"],
+        calculation_origin="Plota ndvi_zscore por data, destacando outlier_flag.",
+        chart_code="""fig = px.scatter(ndvi_outliers, x='date', y='ndvi_zscore', color='area_label', symbol='outlier_flag')""",
+        interpretation="Destaque visual para cenas atípicas que podem explicar leituras anômalas e merecem inspeção humana.",
+        related_hypotheses=["H3"],
+    ),
+    "drivers_problem_weeks": ChartSpec(
+        key="drivers_problem_weeks",
+        title="Drivers das semanas-problema",
+        dataframe_sources=["event_driver_lift.csv"],
+        calculation_origin="Usa delta_pp por driver e comparison_pair.",
+        chart_code="""fig = px.bar(event_driver_lift, x='driver', y='delta_pp', color='evidence_level', facet_row='comparison_pair')""",
+        interpretation="Expõe quais fatores aparecem mais nas semanas ruins do NDVI do que no baseline.",
+        related_hypotheses=["H3"],
+    ),
+    "correlations": ChartSpec(
+        key="correlations",
+        title="Correlações semanais",
+        dataframe_sources=["weekly_correlations.csv"],
+        calculation_origin="Usa strongest_abs_correlation para ordenar features por força de relação com o alvo.",
+        chart_code="""fig = px.bar(corr_plot, x='strongest_abs_correlation', y='feature', orientation='h', color='direction')""",
+        interpretation="Ajuda a priorizar variáveis associadas ao NDVI ou ao delta futuro do NDVI, sem vender causalidade.",
+        related_hypotheses=["H3", "H4"],
+    ),
+    "hypothesis_summary": ChartSpec(
+        key="hypothesis_summary",
+        title="Resumo visual das hipóteses H1–H4",
+        dataframe_sources=["final_hypothesis_register.csv"],
+        calculation_origin="Pivot de status por hypothesis_id e comparison_pair.",
+        chart_code="""fig = go.Figure(go.Heatmap(...))""",
+        interpretation="Painel executivo do status final das hipóteses por par.",
+        related_hypotheses=["H1", "H2", "H3", "H4"],
+    ),
+    "hypothesis_h1_effect": ChartSpec(
+        key="hypothesis_h1_effect",
+        title="Efeito de H1 no NDVI médio semanal",
+        dataframe_sources=["pair_effect_tests.csv"],
+        calculation_origin="Filtra metric == ndvi_mean_week e plota advantage_4_0 com IC95%.",
+        chart_code="""fig = go.Figure(go.Bar(... error_y ...))""",
+        interpretation="Mostra a direção e a robustez do efeito do 4.0 sobre o NDVI médio semanal.",
+        related_hypotheses=["H1"],
+    ),
+    "hypothesis_h2_problem_rates": ChartSpec(
+        key="hypothesis_h2_problem_rates",
+        title="Semanas de problema por área",
+        dataframe_sources=["ndvi_phase_timeline", "pair_effect_tests.csv"],
+        calculation_origin="Agrega low_vigor_flag e major_drop_flag por área.",
+        chart_code="""fig = px.bar(h2_rates, x='area_label', y='problem_rate', color='problem_metric', facet_row='comparison_pair', barmode='group')""",
+        interpretation="Mostra se o 4.0 teve menos semanas ruins do que o convencional dentro do par.",
+        related_hypotheses=["H2"],
+    ),
+    "outlook_pre_harvest": ChartSpec(
+        key="outlook_pre_harvest",
+        title="Outlook pré-colheita por área",
+        dataframe_sources=["ndvi_outlook"],
+        calculation_origin="Plota trajectory_score e expected_vs_pair por área.",
+        chart_code="""fig = px.bar(ndvi_outlook, x='area_label', y='trajectory_score', color='expected_vs_pair', facet_row='comparison_pair')""",
+        interpretation="Resume a leitura final da trajetória, separando score, faixa e posição esperada no par.",
+        related_hypotheses=["H4"],
+    ),
+}
+
+
+RAW_SOURCE_GROUPS: dict[str, dict[str, Any]] = {
+    "soil_analysis": {"group": "Cropman", "description": "Análise de solo"},
+    "ndvi_metadata": {"group": "OneSoil", "description": "Metadados do NDVI"},
+    "ndvi_images_dir": {"group": "OneSoil", "description": "Imagens JPG de apoio"},
+    "weather_hourly": {"group": "Metos", "description": "Clima horário"},
+    "traps_data": {"group": "EKOS Pest", "description": "Dados de armadilhas"},
+    "traps_list": {"group": "EKOS Pest", "description": "Cadastro de armadilhas"},
+    "pest_list": {"group": "EKOS Pest", "description": "Lista de pragas"},
+    "pest_details": {"group": "EKOS Pest", "description": "Detalhes das pragas"},
+    "traps_events": {"group": "EKOS Pest", "description": "Eventos das armadilhas"},
+    "planting_layer": {"group": "EKOS Layers", "description": "Camada de plantio"},
+    "harvest_layer": {"group": "EKOS Layers", "description": "Camada de colheita"},
+    "fertilization_layer": {"group": "EKOS Layers", "description": "Camada de adubação"},
+    "spray_pressure_layer": {"group": "EKOS Layers", "description": "Camada de pressão de pulverização"},
+    "overlap_layer": {"group": "EKOS Layers", "description": "Camada de sobreposição"},
+    "speed_layer": {"group": "EKOS Layers", "description": "Camada de velocidade"},
+    "state_layer": {"group": "EKOS Layers", "description": "Camada de estado"},
+    "stop_reason_layer": {"group": "EKOS Layers", "description": "Camada de parada"},
+    "alarm_layer": {"group": "EKOS Layers", "description": "Camada de alarmes"},
+    "engine_rotation_layer": {"group": "EKOS Layers", "description": "Camada de rotação do motor"},
+    "engine_temperature_layer": {"group": "EKOS Layers", "description": "Camada de temperatura do motor"},
+    "fuel_consumption_layer": {"group": "EKOS Layers", "description": "Camada de consumo de combustível"},
+    "parameterized_alert_layer": {"group": "EKOS Layers", "description": "Camada de alertas parametrizados"},
+    "schedule_layer": {"group": "EKOS Layers", "description": "Camada de agenda"},
+    "telemetry_communication_layer": {"group": "EKOS Layers", "description": "Camada de telemetria de comunicação"},
+}
+
+
+CSV_LINEAGE_ORDER = [
+    "dataset_overview.csv",
+    "ndvi_stats_by_area.csv",
+    "ndvi_outliers.csv",
+    "pair_weekly_gaps.csv",
+    "pair_effect_tests.csv",
+    "pair_classic_tests.csv",
+    "weekly_correlations.csv",
+    "event_driver_lift.csv",
+    "final_hypothesis_register.csv",
+    "decision_summary.csv",
+]
+
+
+INTERMEDIATE_TABLE_ORDER = [
+    "ndvi_clean",
+    "weather_daily",
+    "weather_weekly",
+    "ops_area_daily",
+    "miip_daily",
+    "pairwise_weekly_features",
+    "ops_support_daily",
+    "ops_support_weekly",
+    "ndvi_phase_timeline",
+    "ndvi_events",
+    "ndvi_pair_diagnostics",
+    "ndvi_outlook",
+]
+
+
+KEY_COLUMNS = ["season_id", "area_label", "comparison_pair", "treatment", "date", "week_start"]
+
+
+def resolve_registry_path(project_dir: Path, relative_path: str) -> Path:
+    return project_dir / relative_path
