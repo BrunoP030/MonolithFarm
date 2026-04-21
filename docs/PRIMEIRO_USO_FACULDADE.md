@@ -1,9 +1,10 @@
 # Checklist de Primeiro Uso na Faculdade
 
-Checklist rapido para reduzir erro de ambiente em maquina nova e deixar o projeto pronto para os dois fluxos separados do repositorio:
+Checklist rapido para reduzir erro de ambiente em maquina nova e deixar o projeto pronto para os tres fluxos separados do repositorio:
 
 - dashboard Streamlit;
-- notebook analitico NDVI.
+- notebook analitico NDVI;
+- app de auditoria e rastreabilidade NDVI.
 
 ## 1) Conferencia Inicial
 
@@ -93,9 +94,29 @@ uv pip install --python .venv/bin/python jupyterlab ipykernel
 
 Esse e o unico notebook oficial do projeto. Os notebooks antigos por fases foram removidos para manter um unico fluxo de execucao e apresentacao.
 
-Esse notebook cobre o pipeline analitico em `farmlab/`. O dashboard e um subsistema separado.
+Esse notebook cobre o pipeline analitico em `farmlab/`. O dashboard e a app de auditoria sao subsistemas separados.
 
-## 6) Se os Dados Estiverem em Outro Caminho
+## 6) Abrir a App de Auditoria NDVI
+
+Linux/macOS:
+
+```bash
+./scripts/start_feature_lineage_app.sh
+```
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_feature_lineage_app.ps1
+```
+
+URL esperada:
+
+```text
+http://127.0.0.1:8502
+```
+
+## 7) Se os Dados Estiverem em Outro Caminho
 
 Windows:
 
@@ -109,7 +130,7 @@ Linux/macOS:
 REFRESH=1 ./scripts/start_dashboard.sh "/caminho/FarmLab"
 ```
 
-## 7) Se a Porta 8501 Estiver Ocupada
+## 8) Se a Porta 8501 Estiver Ocupada
 
 Windows:
 
@@ -129,15 +150,16 @@ URL:
 http://127.0.0.1:8502
 ```
 
-## 8) Verificacao Final Esperada
+## 9) Verificacao Final Esperada
 
 - ambiente virtual criado;
 - dependencias instaladas;
 - banco DuckDB atualizado;
 - painel Streamlit abrindo no navegador;
-- notebook mestre abrindo no Jupyter.
+- notebook mestre abrindo no Jupyter;
+- app de auditoria abrindo no navegador.
 
-## 9) Solucao Rapida de Problemas
+## 10) Solucao Rapida de Problemas
 
 - erro de caminho dos dados:
   - confirme `./data` ou use caminho explicito.
@@ -147,8 +169,10 @@ http://127.0.0.1:8502
   - instale `jupyterlab` e `ipykernel` na mesma `.venv`.
 - painel nao abre:
   - verifique a URL e mantenha o terminal aberto.
+- app de auditoria nao abre:
+  - confirme que a `.venv` tem `streamlit` e que `notebook_outputs/complete_ndvi` pode ser escrito.
 
-## 10) O Que Nao Deve Entrar em Commit
+## 11) O Que Nao Deve Entrar em Commit
 
 Nao versione:
 

@@ -1,6 +1,6 @@
 # Arquitetura do Repositorio
 
-O repositorio foi separado em dois subsistemas para evitar confusao entre o projeto analitico e o painel Streamlit.
+O repositorio foi separado em tres subsistemas para evitar confusao entre o projeto analitico, o painel Streamlit e a camada nova de auditoria.
 
 ## 1. Pipeline Analitico NDVI
 
@@ -48,7 +48,28 @@ Persistencia:
 
 - `storage/monolithfarm.duckdb`
 
-## 3. Wrappers de compatibilidade
+## 3. App de Auditoria e Lineage NDVI
+
+Este subsistema existe para inspeção humana do pipeline NDVI: arquivos brutos, tabelas intermediárias, CSVs finais, features derivadas, gráficos e hipóteses.
+
+Implementacao:
+
+- `dashboard/feature_lineage_app.py`
+- `dashboard/lineage/registry.py`
+- `dashboard/lineage/runtime.py`
+- `dashboard/lineage/column_catalog.py`
+- `dashboard/lineage/column_lineage.py`
+- `dashboard/lineage/docs_registry.py`
+- `dashboard/lineage/doc_scraper.py`
+- `dashboard/lineage/quality_rules.py`
+- `dashboard/lineage/ui.py`
+
+Inicializacao:
+
+- `scripts/start_feature_lineage_app.ps1`
+- `scripts/start_feature_lineage_app.sh`
+
+## 4. Wrappers de compatibilidade
 
 Os arquivos abaixo foram mantidos apenas para nao quebrar comandos e imports antigos:
 
@@ -58,8 +79,9 @@ Os arquivos abaixo foram mantidos apenas para nao quebrar comandos e imports ant
 
 Eles nao devem mais ser tratados como implementacao principal.
 
-## 4. Regra pratica
+## 5. Regra pratica
 
 - quer entender a analise completa: abra `notebooks/complete_ndvi_analysis.ipynb`;
 - quer inspecionar a logica analitica: abra os modulos `farmlab/*` do pipeline NDVI;
-- quer mexer no painel: abra `dashboard/`.
+- quer mexer no painel: abra `dashboard/`;
+- quer rastrear feature, linha, CSV e hipótese: abra `dashboard/feature_lineage_app.py`.

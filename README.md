@@ -8,10 +8,11 @@ Este repositorio materializa um MVP de ciencia de dados agricola para responder 
 
 - por que uma area apresentou melhor desempenho agronomico e produtivo do que outra na mesma safra?
 
-O projeto integra fontes heterogeneas (satelite, operacao, clima, solo e pragas). Hoje ele tem dois fluxos separados:
+O projeto integra fontes heterogeneas (satelite, operacao, clima, solo e pragas). Hoje ele tem tres fluxos separados:
 
 - fluxo analitico principal: notebook `complete_ndvi_analysis.ipynb` + pipeline NDVI em `farmlab/`;
-- fluxo de painel: dashboard Streamlit + workspace legado em `dashboard/`.
+- fluxo de painel: dashboard Streamlit + workspace legado em `dashboard/`;
+- fluxo de auditoria: app Streamlit de rastreabilidade e inspeção de lineage focada em NDVI.
 
 ## Objetivo do Projeto
 
@@ -24,7 +25,7 @@ O objetivo e explicar diferencas de vigor vegetativo, produtividade e eficiencia
 
 ## Arquitetura da Solucao
 
-O repositorio ficou separado em dois subsistemas independentes.
+O repositorio ficou separado em tres subsistemas independentes.
 
 ### 1. Analise NDVI e Notebook
 
@@ -46,6 +47,27 @@ Este fluxo e separado do notebook e existe apenas para leitura interativa do pai
 - [dashboard/database.py](dashboard/database.py)
 - [scripts/start_dashboard.ps1](scripts/start_dashboard.ps1)
 - [scripts/start_dashboard.sh](scripts/start_dashboard.sh)
+
+### 3. Auditoria e Rastreabilidade NDVI
+
+Camada nova de inspeção humana para navegar por arquivos brutos, tabelas intermediárias, CSVs finais, features derivadas, gráficos e hipóteses:
+
+- [dashboard/feature_lineage_app.py](dashboard/feature_lineage_app.py)
+- [dashboard/lineage/registry.py](dashboard/lineage/registry.py)
+- [dashboard/lineage/runtime.py](dashboard/lineage/runtime.py)
+- [dashboard/lineage/docs_registry.py](dashboard/lineage/docs_registry.py)
+- [dashboard/lineage/doc_scraper.py](dashboard/lineage/doc_scraper.py)
+- [dashboard/lineage/column_catalog.py](dashboard/lineage/column_catalog.py)
+- [dashboard/lineage/column_lineage.py](dashboard/lineage/column_lineage.py)
+- [dashboard/lineage/data_profiler.py](dashboard/lineage/data_profiler.py)
+- [dashboard/lineage/quality_rules.py](dashboard/lineage/quality_rules.py)
+- [dashboard/lineage/lineage_graph.py](dashboard/lineage/lineage_graph.py)
+- [dashboard/lineage/ui.py](dashboard/lineage/ui.py)
+- [dashboard/lineage/README.md](dashboard/lineage/README.md)
+- [scripts/start_feature_lineage_app.ps1](scripts/start_feature_lineage_app.ps1)
+- [scripts/start_feature_lineage_app.sh](scripts/start_feature_lineage_app.sh)
+
+Essa app de auditoria agora funciona como explorador total: auditoria de cobertura, catálogo bruto, dicionário de colunas, rastreabilidade de coluna final até bruto, catálogo de features, drivers, qualidade dos dados, documentação FarmLab cacheada, rastreio por linha/semana/área, CSVs finais e hipóteses H1-H4.
 
 Wrappers de compatibilidade mantidos:
 
@@ -165,12 +187,15 @@ REFRESH=1 ./scripts/start_dashboard.sh data storage/monolithfarm.duckdb 8502
 - [docs/PRIMEIRO_USO_FACULDADE.md](docs/PRIMEIRO_USO_FACULDADE.md)
 - [docs/COLAB_DRIVE.md](docs/COLAB_DRIVE.md)
 - [docs/ARQUITETURA.md](docs/ARQUITETURA.md)
+- [dashboard/lineage/README.md](dashboard/lineage/README.md)
 
 ## Notebook Unico do Projeto
 
 O notebook oficial e unico para navegacao, Colab e apresentacao do projeto e [complete_ndvi_analysis.ipynb](notebooks/complete_ndvi_analysis.ipynb).
 
-Ele documenta o fluxo analitico completo. O dashboard nao participa das decisoes, hipoteses e CSVs finais do pipeline NDVI.
+Ele agora e gerado a partir do template didatico em `monolithfarm_notebook_ndvi_foco_total_v2_package/` e executa o pipeline real do repositorio com base na configuracao de `.monolithfarm.paths.json`.
+
+Ele documenta o fluxo analitico completo. O dashboard e a app de auditoria nao participam das decisoes, hipoteses e CSVs finais do pipeline NDVI.
 
 Os notebooks antigos por fases e o notebook `master` foram removidos para evitar duplicacao e manter um unico fluxo de leitura e execucao.
 
@@ -179,6 +204,7 @@ O notebook detecta automaticamente a raiz do projeto e usa `./data` por padrao. 
 - `MONOLITHFARM_PROJECT_DIR`
 - `MONOLITHFARM_DATA_DIR`
 - `MONOLITHFARM_OUTPUT_DIR`
+- `MONOLITHFARM_PROFILE`
 
 Para nao commitar caminhos pessoais, use um arquivo local ignorado pelo Git:
 
@@ -235,6 +261,26 @@ Saidas principais:
 - `notebook_outputs/complete_ndvi/pair_classic_tests.csv`
 - `notebook_outputs/complete_ndvi/weekly_correlations.csv`
 - `notebook_outputs/complete_ndvi/review/review_summary.md`
+
+## App de Auditoria NDVI
+
+Linux/macOS:
+
+```bash
+./scripts/start_feature_lineage_app.sh
+```
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_feature_lineage_app.ps1
+```
+
+URL esperada:
+
+```text
+http://127.0.0.1:8502
+```
 
 ## Protecao de Dados e Artefatos Locais
 
