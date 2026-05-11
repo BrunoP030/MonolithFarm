@@ -39,6 +39,7 @@ class ColumnLineage:
     mapping_status: str = "mapeado"
     mapping_confidence: str = "manual_auditavel"
     limitations: list[str] = field(default_factory=list)
+    plain_language: str = ""
 
 
 def build_column_lineage_index(
@@ -49,6 +50,7 @@ def build_column_lineage_index(
     records: list[ColumnLineage] = []
     records.extend(_raw_column_records(raw_column_catalog))
     records.extend(_feature_records())
+    records.extend(_driver_records())
     records.extend(_intermediate_records(workspace))
     records.extend(_final_csv_records(outputs))
     frame = pd.DataFrame([_record_to_row(record) for record in records])
@@ -99,6 +101,7 @@ def lineage_detail_from_row(row: pd.Series) -> ColumnLineage:
         mapping_status=str(row.get("mapping_status", "")),
         mapping_confidence=str(row.get("mapping_confidence", "")),
         limitations=_split_cell(row.get("limitations")),
+        plain_language=str(row.get("plain_language", "")),
     )
 
 
@@ -110,7 +113,18 @@ def build_lineage_coverage_report(lineage_index: pd.DataFrame, outputs: dict[str
         mapped = final[final["table"] == csv_name] if not final.empty else pd.DataFrame()
         mapped_columns = set(mapped["column"]) if not mapped.empty else set()
         strong = (
-            mapped[mapped["mapping_status"].isin(["mapeado", "mapeado_por_feature", "mapeado_por_driver", "mapeado_por_driver_dinamico", "mapeado_por_dependencia"])]
+            mapped[
+                mapped["mapping_status"].isin(
+                    [
+                        "mapeado",
+                        "mapeado_por_feature",
+                        "mapeado_por_driver",
+                        "mapeado_por_driver_dinamico",
+                        "mapeado_por_driver_entidade",
+                        "mapeado_por_dependencia",
+                    ]
+                )
+            ]
             if not mapped.empty
             else pd.DataFrame()
         )
@@ -124,7 +138,17 @@ def build_lineage_coverage_report(lineage_index: pd.DataFrame, outputs: dict[str
                 "unmapped_columns": ", ".join(sorted(expected - mapped_columns)),
             }
         )
-    return pd.DataFrame(rows).sort_values(["coverage_pct", "csv"]).reset_index(drop=True)
+    columns = [
+        "csv",
+        "columns_total",
+        "columns_with_lineage",
+        "strong_or_partial_lineage",
+        "coverage_pct",
+        "unmapped_columns",
+    ]
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows, columns=columns).sort_values(["coverage_pct", "csv"]).reset_index(drop=True)
 
 
 def infer_feature_for_column(column: str, table: str = "") -> str | None:
@@ -204,6 +228,7 @@ def _raw_column_records(raw_column_catalog: pd.DataFrame) -> list[ColumnLineage]
                 mapping_status=str(getattr(row, "usage_status", "")),
                 mapping_confidence="automatico_por_catalogo_bruto",
                 limitations=[] if used_by else ["Uso direto nao detectado por feature; pode ser contexto, cadastro ou coluna ainda nao usada no pipeline NDVI."],
+                plain_language=doc.practical_interpretation,
             )
         )
     return records
@@ -238,6 +263,41 @@ def _feature_records() -> list[ColumnLineage]:
                 mapping_status="mapeado_por_feature",
                 mapping_confidence="registry_manual_validado",
                 limitations=_limitations_for_feature(feature_name),
+                plain_language=_plain_language_for_feature(feature_name),
+            )
+        )
+    return records
+
+
+def _driver_records() -> list[ColumnLineage]:
+    records: list[ColumnLineage] = []
+    for driver_name, doc in DRIVER_DOCUMENTATION.items():
+        raw_columns = _resolve_raw_columns_for_feature(doc.flag_feature)
+        records.append(
+            ColumnLineage(
+                lineage_id=f"driver::{driver_name}",
+                column=driver_name,
+                layer="driver",
+                table=doc.born_table,
+                definition=doc.definition,
+                raw_sources=doc.raw_sources,
+                raw_columns=raw_columns,
+                upstream_columns=_dedupe([doc.flag_feature, *doc.source_columns]),
+                transformation=_driver_transformation(driver_name),
+                filters=["O driver só é interpretado depois que a timeline semanal junta NDVI, clima, MIIP e operação."],
+                joins=["Herda joins de pairwise_weekly_features + ops_support_weekly por season_id e week_start."],
+                aggregations=_aggregation_for_feature(doc.flag_feature),
+                thresholds=_thresholds_for_feature(doc.flag_feature) or [doc.rule],
+                generated_by="farmlab.ndvi_deepdive._driver_candidates",
+                python_file="farmlab/ndvi_deepdive.py",
+                downstream_tables=["ndvi_phase_timeline", "ndvi_events", "event_driver_lift"],
+                downstream_csvs=doc.final_csvs,
+                charts=doc.charts,
+                hypotheses=doc.hypotheses,
+                mapping_status="mapeado_por_driver_entidade",
+                mapping_confidence="driver_registry_manual_validado",
+                limitations=doc.limitations,
+                plain_language=doc.interpretation,
             )
         )
     return records
@@ -300,9 +360,10 @@ def _intermediate_records(workspace: dict[str, Any] | None) -> list[ColumnLineag
                     hypotheses=hypotheses,
                     mapping_status=status,
                     mapping_confidence="feature_registry_ou_table_registry",
-                    limitations=[] if feature else ["Lineage por tabela, nao por expressao exata de codigo."],
-                )
+                limitations=[] if feature else ["Lineage por tabela, nao por expressao exata de codigo."],
+                plain_language=_plain_language_for_feature(feature) if feature else doc.practical_interpretation,
             )
+        )
     return records
 
 
@@ -340,6 +401,10 @@ def _final_csv_records(outputs: dict[str, pd.DataFrame]) -> list[ColumnLineage]:
                         mapping_status="mapeado_por_driver_dinamico",
                         mapping_confidence="driver_registry_manual_validado",
                         limitations=["A coluna e calculada por linha; para saber a flag exata, filtre pelo valor da coluna driver."],
+                        plain_language=(
+                            "Esta coluna resume se um driver apareceu com mais frequência nas semanas-problema do NDVI. "
+                            "Para saber a origem exata, filtre a linha pelo valor de driver."
+                        ),
                     )
                 )
                 continue
@@ -377,6 +442,7 @@ def _final_csv_records(outputs: dict[str, pd.DataFrame]) -> list[ColumnLineage]:
                 status = "mapeado_por_driver"
                 confidence = "driver_registry_manual_validado"
                 limitations = doc.limitations
+                plain_language = doc.interpretation
             else:
                 doc = column_documentation_for(column)
                 definition = csv_spec.column_docs.get(column, doc.definition) if csv_spec else doc.definition
@@ -393,6 +459,7 @@ def _final_csv_records(outputs: dict[str, pd.DataFrame]) -> list[ColumnLineage]:
                 status = "parcial_por_dependencia_csv" if csv_spec else "parcial_por_csv_exportado"
                 confidence = "csv_registry_ou_csv_real_exportado"
                 limitations = ["Lineage por dependencia do CSV; nao ha mapeamento coluna-a-coluna automatico para esta coluna."]
+                plain_language = doc.practical_interpretation
             records.append(
                 ColumnLineage(
                     lineage_id=f"csv::{csv_name}::{column}",
@@ -417,13 +484,14 @@ def _final_csv_records(outputs: dict[str, pd.DataFrame]) -> list[ColumnLineage]:
                     mapping_status=status,
                     mapping_confidence=confidence,
                     limitations=_dedupe(limitations),
+                    plain_language=plain_language,
                 )
             )
     return records
 
 
 def _record_to_row(record: ColumnLineage) -> dict[str, Any]:
-    layer_order = {"bruto": 0, "feature": 1, "intermediario": 2, "csv_final": 3}
+    layer_order = {"bruto": 0, "feature": 1, "driver": 2, "intermediario": 3, "csv_final": 4}
     return {
         "lineage_id": record.lineage_id,
         "column": record.column,
@@ -448,6 +516,7 @@ def _record_to_row(record: ColumnLineage) -> dict[str, Any]:
         "mapping_status": record.mapping_status,
         "mapping_confidence": record.mapping_confidence,
         "limitations": _join(record.limitations),
+        "plain_language": record.plain_language,
     }
 
 
@@ -462,16 +531,30 @@ def _resolve_raw_columns_for_feature(feature: str) -> list[str]:
         "ndvi_mean_week": ["b1_mean"],
         "soil_pct_week": ["b1_pct_solo"],
         "dense_veg_pct_week": ["b1_pct_veg_densa"],
+        "precipitation_mm_week": ["Precipitação (mm)", "precipitation_mm"],
+        "water_balance_mm_week": ["Precipitação (mm)", "Evapotranspiração (mm)"],
+        "temp_avg_c_week": ["Temp. Média (°C)"],
+        "humidity_avg_pct_week": ["Umidade Rel. Média (%)"],
+        "avg_pest_count_week": ["pestCount"],
+        "harvest_yield_mean_kg_ha": ["Yield - kg/ha"],
+        "harvest_yield_mean_kg_ha_week": ["Yield - kg/ha"],
+        "planting_population_mean_ha": ["Population - ha"],
+        "fert_dose_gap_abs_mean_kg_ha_week": ["AppliedDos - kg/ha", "Configured - kg/ha"],
+        "overlap_area_pct_bbox_week": ["OverlapArea - ha", "bounds_left/bounds_right/bounds_top/bounds_bottom"],
+        "stop_duration_h_per_bbox_ha_week": ["Duration - h", "bounds_left/bounds_right/bounds_top/bounds_bottom"],
+        "invalid_telemetry_share_week": ["InvalidCommunication"],
+        "alarm_events_week": ["Alarm"],
+        "engine_temp_hot_share_week": ["EngineTemperature - ºC"],
         "ndvi_delta_week": ["b1_mean", "filename/date"],
         "ndvi_auc_week": ["b1_mean", "filename/date"],
         "low_vigor_flag": ["b1_mean"],
         "major_drop_flag": ["b1_mean", "filename/date"],
         "high_soil_flag": ["b1_pct_solo"],
-        "weather_stress_flag": ["Metos precipitation/temperature/evapotranspiration columns"],
-        "pest_risk_flag": ["traps_data counts", "traps_events alert/control/damage"],
-        "fert_risk_flag": ["Fertilization dose/rate columns"],
+        "weather_stress_flag": ["precipitation_mm", "evapotranspiration_mm", "water_balance_mm_week"],
+        "pest_risk_flag": ["traps_data counts", "traps_events alert/control/damage", "avg_pest_count_week"],
+        "fert_risk_flag": ["AppliedDos - kg/ha", "Configured - kg/ha", "fert_dose_gap_abs_mean_kg_ha_week"],
         "overlap_risk_flag": ["Overlap geometry/area columns"],
-        "stop_risk_flag": ["Stop reason duration/date columns"],
+        "stop_risk_flag": ["Duration - h", "stop_duration_h_per_bbox_ha_week"],
         "telemetry_risk_flag": ["InvalidCommunication"],
         "alert_risk_flag": ["Alarm/Event columns", "Parameterized alert columns"],
         "engine_risk_flag": ["Engine temperature", "Engine rotation", "Fuel consumption"],
@@ -508,6 +591,36 @@ def _thresholds_for_feature(feature: str) -> list[str]:
         "risk_flag_count": ["soma das 9 flags de risco"],
     }
     return mapping.get(feature, [])
+
+
+def _driver_transformation(driver: str) -> str:
+    if driver == "solo_exposto":
+        return (
+            "b1_pct_solo -> soil_pct em build_ndvi_clean; "
+            "soil_pct -> soil_pct_week por media semanal em build_ndvi_weekly; "
+            "soil_pct_week -> high_soil_flag por quantil/threshold em build_ndvi_phase_timeline; "
+            "high_soil_flag -> driver solo_exposto em _driver_candidates."
+        )
+    doc = DRIVER_DOCUMENTATION[driver]
+    return f"{' + '.join(doc.source_columns)} -> {doc.flag_feature}; {doc.rule}; {doc.flag_feature} -> driver {driver} em _driver_candidates."
+
+
+def _plain_language_for_feature(feature: str | None) -> str:
+    if not feature:
+        return ""
+    mapping = {
+        "ndvi_mean": "NDVI medio da cena: uma leitura simples de vigor verde medio na area naquele dia.",
+        "ndvi_mean_week": "Media semanal do NDVI, usada para comparar a trajetoria temporal entre areas.",
+        "soil_pct": "Percentual da imagem classificado como solo exposto.",
+        "soil_pct_week": "Media semanal de solo exposto; valores altos sugerem menor cobertura verde aparente.",
+        "high_soil_flag": "Marca semanas em que o solo exposto ficou alto para o historico do pacote.",
+        "pest_risk_flag": "Marca semanas com contagem, alerta ou dano de pragas acima do criterio do projeto.",
+        "harvest_yield_mean_kg_ha": "Produtividade media registrada na colheita, quando a camada operacional tem cobertura suficiente.",
+    }
+    if feature in mapping:
+        return mapping[feature]
+    spec = FEATURE_REGISTRY.get(feature)
+    return spec.definition if spec else ""
 
 
 def _aggregation_for_feature(feature: str) -> list[str]:

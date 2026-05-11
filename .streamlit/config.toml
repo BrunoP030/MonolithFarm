@@ -6,3 +6,10 @@ headless = true
 address = "127.0.0.1"
 port = 8501
 
+[theme]
+base = "light"
+primaryColor = "#136b7b"
+backgroundColor = "#f6f7f9"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#101828"
+font = "sans serif"

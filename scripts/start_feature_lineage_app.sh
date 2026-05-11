@@ -1,30 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT="${1:-8502}"
+PORT="${1:-5173}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ATLAS_DIR="${ROOT}/lineage_atlas"
 
-PYTHON_BIN=".venv/bin/python"
+echo "start_feature_lineage_app.sh agora redireciona para o MonolithFarm Atlas NDVI em React."
 
+PYTHON_BIN="${ROOT}/.venv/bin/python"
 if [[ ! -x "${PYTHON_BIN}" ]]; then
-  if command -v uv >/dev/null 2>&1; then
-    echo "Criando ambiente virtual com uv..."
-    uv venv .venv
-  else
-    echo "Criando ambiente virtual com python3 -m venv..."
-    python3 -m venv .venv
-  fi
+  PYTHON_BIN="${ROOT}/.venv_win/Scripts/python.exe"
+fi
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+  PYTHON_BIN="python"
 fi
 
-if "${PYTHON_BIN}" -m pip --version >/dev/null 2>&1; then
-  echo "Instalando dependencias com pip..."
-  "${PYTHON_BIN}" -m pip install -e .
-elif command -v uv >/dev/null 2>&1; then
-  echo "Instalando dependencias com uv..."
-  uv pip install --python "${PYTHON_BIN}" -e .
-else
-  echo "Erro: pip nao esta disponivel no venv e uv nao foi encontrado." >&2
-  exit 1
+if [[ ! -d "${ATLAS_DIR}/node_modules" ]]; then
+  (cd "${ATLAS_DIR}" && npm install)
 fi
 
-echo "Abrindo app de auditoria NDVI em http://127.0.0.1:${PORT}"
-exec "${PYTHON_BIN}" -m streamlit run dashboard/feature_lineage_app.py --server.address 127.0.0.1 --server.port "${PORT}"
+(cd "${ROOT}" && "${PYTHON_BIN}" scripts/export_lineage_atlas_data.py)
+echo "Abrindo MonolithFarm Atlas NDVI em http://127.0.0.1:${PORT}"
+exec npm --prefix "${ATLAS_DIR}" run dev -- --host 127.0.0.1 --port "${PORT}"

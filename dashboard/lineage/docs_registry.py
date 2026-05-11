@@ -37,7 +37,7 @@ class DriverDocumentation:
     source_columns: list[str]
     rule: str
     raw_sources: list[str]
-    hypotheses: list[str] = field(default_factory=lambda: ["H3"])
+    hypotheses: list[str] = field(default_factory=lambda: ["H3", "H4"])
     charts: list[str] = field(default_factory=lambda: ["drivers_problem_weeks"])
     final_csvs: list[str] = field(default_factory=lambda: ["event_driver_lift.csv", "final_hypothesis_register.csv", "decision_summary.csv"])
     interpretation: str = ""

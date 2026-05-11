@@ -17,6 +17,25 @@ from dashboard.lineage.registry import (
 
 PreviewLoader = Callable[[Path, int], pd.DataFrame]
 
+DATASET_BY_SOURCE_GROUP = {
+    "OneSoil": "satelite",
+    "Metos": "meteorologia",
+    "Cropman": "solo",
+    "EKOS Layers": "ekos_camadas",
+    "EKOS Pest": "miip",
+}
+
+DATASET_BY_SOURCE_KEY = {
+    "ndvi_metadata": "satelite",
+    "weather_hourly": "meteorologia",
+    "soil_analysis": "solo",
+    "pest_list": "miip",
+    "pest_details": "miip",
+    "traps_list": "miip",
+    "traps_data": "miip",
+    "traps_events": "miip",
+}
+
 
 def build_raw_column_catalog(
     raw_catalog: pd.DataFrame,
@@ -54,6 +73,7 @@ def build_raw_column_catalog(
         source_doc = documentation_for_source_group(source.source_group, docs_cache or {})
         for column in preview.columns:
             doc = column_documentation_for(column)
+            farm_doc = _farm_schema_column_doc(column, source.source_group, source.source_key, docs_cache or {})
             used_by = feature_usage.get(column, [])
             usage_status = _classify_usage(column, doc.usage_status, used_by)
             rows.append(
@@ -69,12 +89,13 @@ def build_raw_column_catalog(
                     "examples": _examples(preview[column]),
                     "temporal_min_source": getattr(source, "temporal_min", pd.NA),
                     "temporal_max_source": getattr(source, "temporal_max", pd.NA),
-                    "documentation_status": doc.documentation_status,
-                    "documentation": doc.definition,
-                    "practical_interpretation": doc.practical_interpretation,
+                    "documentation_status": farm_doc.get("documentation_status", doc.documentation_status),
+                    "documentation": farm_doc.get("definition", doc.definition),
+                    "practical_interpretation": farm_doc.get("practical_interpretation", doc.practical_interpretation),
                     "pipeline_usage": _format_pipeline_usage(doc.pipeline_usage, used_by),
                     "usage_status": usage_status,
-                    "farm_docs_url": source_doc.get("farm_docs_url", ""),
+                    "farm_docs_url": farm_doc.get("farm_docs_url", source_doc.get("farm_docs_url", "")),
+                    "farm_docs_dataset": farm_doc.get("dataset_title", ""),
                     "source_doc_status": source_doc.get("documentation_status", "sem_documentacao_externa_encontrada"),
                 }
             )
@@ -224,6 +245,37 @@ def documentation_for_source_group(source_group: str, docs_cache: dict[str, Any]
         "documentation_status": "sem_documentacao_externa_encontrada",
         "relevant_excerpt": "",
     }
+
+
+def _farm_schema_column_doc(column: str, source_group: str, source_key: str, docs_cache: dict[str, Any]) -> dict[str, str]:
+    dataset_ids = [
+        DATASET_BY_SOURCE_KEY.get(str(source_key), ""),
+        DATASET_BY_SOURCE_GROUP.get(str(source_group), ""),
+    ]
+    dataset_ids = [dataset_id for dataset_id in dataset_ids if dataset_id]
+    datasets = docs_cache.get("dataset_schemas", []) if docs_cache else []
+    candidates = [dataset for dataset in datasets if dataset.get("id") in dataset_ids]
+    if not candidates:
+        candidates = [dataset for dataset in datasets if dataset.get("title") and str(source_group).lower() in str(dataset.get("title")).lower()]
+    normalized_column = _normalize_column_name(column)
+    for dataset in candidates:
+        for col_doc in dataset.get("cols", []):
+            if _normalize_column_name(col_doc.get("col", "")) == normalized_column:
+                description = str(col_doc.get("desc", "")).strip()
+                if not description:
+                    continue
+                return {
+                    "definition": description,
+                    "practical_interpretation": description,
+                    "documentation_status": "farm_lab_schema_extraido",
+                    "farm_docs_url": str(dataset.get("url", "")),
+                    "dataset_title": str(dataset.get("title", "")),
+                }
+    return {}
+
+
+def _normalize_column_name(value: str) -> str:
+    return str(value).strip().lower().replace(" ", "").replace("_", "").replace("-", "")
 
 
 def _classify_usage(column: str, doc_status: str, used_by: list[str]) -> str:

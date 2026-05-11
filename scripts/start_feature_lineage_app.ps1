@@ -1,52 +1,19 @@
 param(
-    [int]$Port = 8502
+    [int]$Port = 5173,
+    [switch]$RefreshDocs
 )
 
 $ErrorActionPreference = "Stop"
 
-function Resolve-VenvPython {
-    if ($IsWindows) {
-        return Join-Path (Get-Location) ".venv\Scripts\python.exe"
-    }
-
-    return Join-Path (Get-Location) ".venv/bin/python"
+$atlasScript = Join-Path $PSScriptRoot "start_lineage_atlas.ps1"
+if (-not (Test-Path $atlasScript)) {
+    throw "Script do Atlas nao encontrado em $atlasScript"
 }
 
-function Ensure-Environment {
-    param([string]$PythonPath)
-
-    if (-not (Test-Path $PythonPath)) {
-        if (Get-Command uv -ErrorAction SilentlyContinue) {
-            Write-Host "Criando ambiente virtual com uv..."
-            uv venv .venv | Out-Host
-        }
-        else {
-            Write-Host "Criando ambiente virtual com python -m venv..."
-            python -m venv .venv | Out-Host
-        }
-    }
-
-    if (-not (Test-Path $PythonPath)) {
-        throw "Nao foi possivel criar/identificar o Python em $PythonPath"
-    }
-
-    Write-Host "Instalando dependencias do projeto..."
-    try {
-        & $PythonPath -m pip --version | Out-Null
-        & $PythonPath -m pip install -e . | Out-Host
-    }
-    catch {
-        if (Get-Command uv -ErrorAction SilentlyContinue) {
-            uv pip install --python $PythonPath -e . | Out-Host
-        }
-        else {
-            throw "pip nao esta disponivel no ambiente virtual e uv nao foi encontrado."
-        }
-    }
+Write-Host "start_feature_lineage_app.ps1 agora redireciona para o MonolithFarm Atlas NDVI em React."
+if ($RefreshDocs) {
+    & $atlasScript -Port $Port -RefreshDocs
 }
-
-$python = Resolve-VenvPython
-Ensure-Environment -PythonPath $python
-
-Write-Host "Abrindo app de auditoria NDVI em http://127.0.0.1:$Port"
-& $python -m streamlit run dashboard/feature_lineage_app.py --server.address 127.0.0.1 --server.port $Port
+else {
+    & $atlasScript -Port $Port
+}

@@ -20,8 +20,14 @@ dependencies = [
   "streamlit>=1.45,<2.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0,<9.0",
+]
+
 [project.scripts]
 monolithfarm-ingest = "dashboard.database:main"
+monolithfarm-audit = "dashboard.lineage.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["dashboard*", "farmlab*"]

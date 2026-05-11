@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
+import os
+import re
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +13,6 @@ from typing import Any
 import pandas as pd
 
 from dashboard.lineage.registry import CSV_LINEAGE_ORDER, RAW_SOURCE_GROUPS
-from farmlab.complete_analysis import build_complete_ndvi_workspace, save_complete_ndvi_outputs
 from farmlab.io import DatasetPaths, discover_dataset_paths, load_ndvi_metadata
 
 
@@ -29,14 +30,26 @@ class ResolvedPaths:
 
 def load_resolved_paths(project_dir: Path | None = None, profile_name: str | None = None) -> ResolvedPaths:
     root = _find_project_dir(project_dir)
+    _load_dotenv(root / ".env")
     config_path = _find_config_path(root)
     config = _read_paths_config(config_path) if config_path else {}
     selected_profile = profile_name or config.get("default_profile", "local")
     profile = config.get("profiles", {}).get(selected_profile, {})
 
     project_path = _resolve_path(profile.get("project_dir"), root) or root
-    data_path = _resolve_path(profile.get("data_dir"), project_path) or (project_path / "data")
+    env_data_dir = os.environ.get("MONOLITHFARM_DATA_DIR")
+    data_path = _resolve_path(env_data_dir, project_path) or _resolve_path(profile.get("data_dir"), project_path) or (project_path / "data")
     output_root = _resolve_path(profile.get("output_root"), project_path) or (project_path / "notebook_outputs")
+    if profile_name is None and not data_path.exists() and selected_profile != "local":
+        # Fallback util quando o profile default aponta para WSL, mas o app esta rodando no Windows.
+        local_profile = config.get("profiles", {}).get("local", {})
+        local_project = _resolve_path(local_profile.get("project_dir"), root) or root
+        local_data = _resolve_path(local_profile.get("data_dir"), local_project) or (local_project / "data")
+        if local_data.exists():
+            selected_profile = "local"
+            project_path = local_project
+            data_path = local_data
+            output_root = _resolve_path(local_profile.get("output_root"), local_project) or (local_project / "notebook_outputs")
     output_dir = (output_root / "complete_ndvi").resolve()
     return ResolvedPaths(
         project_dir=project_path.resolve(),
@@ -47,7 +60,23 @@ def load_resolved_paths(project_dir: Path | None = None, profile_name: str | Non
     )
 
 
+def _load_dotenv(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip().lstrip("\ufeff")
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def build_workspace_and_outputs(data_dir: Path, output_dir: Path, *, persist_outputs: bool = True) -> tuple[dict[str, Any], dict[str, pd.DataFrame]]:
+    from farmlab.complete_analysis import build_complete_ndvi_workspace, save_complete_ndvi_outputs
+
     workspace = build_complete_ndvi_workspace(data_dir)
     paths = discover_dataset_paths(data_dir)
     workspace["ndvi_raw"] = load_ndvi_metadata(paths)
@@ -309,17 +338,41 @@ def _estimate_csv_rows(path: Path, sample_bytes: int = 4 * 1024 * 1024) -> int:
 
 
 def _infer_temporal_bounds(frame: pd.DataFrame) -> tuple[str | None, str | None]:
+    filename_dates = _dates_from_filename_column(frame)
+    if not filename_dates.empty:
+        return filename_dates.min().isoformat(), filename_dates.max().isoformat()
+
     candidates = [column for column in frame.columns if any(token in column.lower() for token in ["date", "data", "timestamp", "createdat", "week_start"])]
     mins: list[pd.Timestamp] = []
     maxs: list[pd.Timestamp] = []
     for column in candidates:
+        lower = column.lower()
+        if lower in {"width", "height", "count"} or "pixels" in lower:
+            continue
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
-            parsed = pd.to_datetime(frame[column], errors="coerce", utc=False)
+            if lower == "timestamp":
+                parsed = pd.to_datetime(pd.to_numeric(frame[column], errors="coerce"), errors="coerce", unit="s", utc=False)
+            else:
+                parsed = pd.to_datetime(frame[column], errors="coerce", utc=False, dayfirst=_looks_day_first(frame[column]))
         parsed = parsed.dropna()
+        parsed = parsed[(parsed.dt.year >= 2000) & (parsed.dt.year <= 2035)]
         if not parsed.empty:
             mins.append(parsed.min())
             maxs.append(parsed.max())
     if not mins:
         return None, None
     return mins and min(mins).isoformat(), maxs and max(maxs).isoformat()
+
+
+def _dates_from_filename_column(frame: pd.DataFrame) -> pd.Series:
+    if "filename" not in frame.columns:
+        return pd.Series(dtype="datetime64[ns]")
+    extracted = frame["filename"].astype(str).str.extract(r"(\d{4}-\d{2}-\d{2})", expand=False)
+    parsed = pd.to_datetime(extracted, errors="coerce")
+    return parsed.dropna()
+
+
+def _looks_day_first(series: pd.Series) -> bool:
+    sample = series.dropna().astype(str).head(20)
+    return bool(sample.str.contains(r"\d{1,2}/\d{1,2}/\d{4}", regex=True).any())
