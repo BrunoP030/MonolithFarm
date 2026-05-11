@@ -96,24 +96,24 @@ Esse e o unico notebook oficial do projeto. Os notebooks antigos por fases foram
 
 Esse notebook cobre o pipeline analitico em `farmlab/`. O dashboard e a app de auditoria sao subsistemas separados.
 
-## 6) Abrir a App de Auditoria NDVI
-
-Linux/macOS:
-
-```bash
-./scripts/start_feature_lineage_app.sh
-```
+## 6) Abrir o Atlas de Auditoria NDVI
 
 Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start_feature_lineage_app.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\start_lineage_atlas.ps1 -Port 5173
+```
+
+Linux/macOS:
+
+```bash
+./scripts/start_feature_lineage_app.sh 5173
 ```
 
 URL esperada:
 
 ```text
-http://127.0.0.1:8502
+http://127.0.0.1:5173
 ```
 
 ## 7) Se os Dados Estiverem em Outro Caminho

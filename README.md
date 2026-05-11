@@ -12,7 +12,7 @@ O projeto integra fontes heterogeneas (satelite, operacao, clima, solo e pragas)
 
 - fluxo analitico principal: notebook `complete_ndvi_analysis.ipynb` + pipeline NDVI em `farmlab/`;
 - fluxo de painel: dashboard Streamlit + workspace legado em `dashboard/`;
-- fluxo de auditoria: app Streamlit de rastreabilidade e inspeção de lineage focada em NDVI.
+- fluxo de auditoria: Atlas React/TypeScript de rastreabilidade e inspeção de lineage focada em NDVI.
 
 ## Objetivo do Projeto
 
@@ -50,9 +50,15 @@ Este fluxo e separado do notebook e existe apenas para leitura interativa do pai
 
 ### 3. Auditoria e Rastreabilidade NDVI
 
-Camada nova de inspeção humana para navegar por arquivos brutos, tabelas intermediárias, CSVs finais, features derivadas, gráficos e hipóteses:
+Camada nova de inspeção humana para navegar por arquivos brutos, tabelas intermediárias, CSVs finais, features derivadas, gráficos e hipóteses.
 
-- [dashboard/feature_lineage_app.py](dashboard/feature_lineage_app.py)
+Interface mantida:
+
+- `lineage_atlas/`: frontend React/TypeScript com canvas de lineage arrastável, busca global, correlações explicadas e painel lateral de detalhes. É a experiência recomendada para entender visualmente arquivos, colunas, features, CSVs, gráficos, hipóteses e auditoria por linha.
+
+- [lineage_atlas/README.md](lineage_atlas/README.md)
+- [scripts/export_lineage_atlas_data.py](scripts/export_lineage_atlas_data.py)
+- [scripts/start_lineage_atlas.ps1](scripts/start_lineage_atlas.ps1)
 - [dashboard/lineage/registry.py](dashboard/lineage/registry.py)
 - [dashboard/lineage/runtime.py](dashboard/lineage/runtime.py)
 - [dashboard/lineage/docs_registry.py](dashboard/lineage/docs_registry.py)
@@ -61,13 +67,12 @@ Camada nova de inspeção humana para navegar por arquivos brutos, tabelas inter
 - [dashboard/lineage/column_lineage.py](dashboard/lineage/column_lineage.py)
 - [dashboard/lineage/data_profiler.py](dashboard/lineage/data_profiler.py)
 - [dashboard/lineage/quality_rules.py](dashboard/lineage/quality_rules.py)
+- [dashboard/lineage/interactive_network.py](dashboard/lineage/interactive_network.py)
+- [dashboard/lineage/storage_strategy.py](dashboard/lineage/storage_strategy.py)
 - [dashboard/lineage/lineage_graph.py](dashboard/lineage/lineage_graph.py)
-- [dashboard/lineage/ui.py](dashboard/lineage/ui.py)
 - [dashboard/lineage/README.md](dashboard/lineage/README.md)
-- [scripts/start_feature_lineage_app.ps1](scripts/start_feature_lineage_app.ps1)
-- [scripts/start_feature_lineage_app.sh](scripts/start_feature_lineage_app.sh)
 
-Essa app de auditoria agora funciona como explorador total: auditoria de cobertura, catálogo bruto, dicionário de colunas, rastreabilidade de coluna final até bruto, catálogo de features, drivers, qualidade dos dados, documentação FarmLab cacheada, rastreio por linha/semana/área, CSVs finais e hipóteses H1-H4.
+O `MonolithFarm Atlas NDVI` em React combina canvas visual, catálogo de arquivos, catálogo de colunas, explorer de features, documentação FarmLab e storytelling final. O canvas usa React Flow: os nós podem ser arrastados, filtrados por busca e abertos em um painel lateral com origem, cálculo, preview real, código e downstream.
 
 Wrappers de compatibilidade mantidos:
 
@@ -121,6 +126,52 @@ O projeto resolve o diretorio de dados nesta ordem:
 3. pasta local `./FarmLab` (legado);
 4. fallback legado `C:\Users\Morgado\Downloads\FarmLab`.
 
+Se a pasta de dados local não existir, os scripts oficiais podem baixar e extrair automaticamente o pacote privado configurado no `.env` local. Esse arquivo não deve ser versionado.
+
+Configuração local esperada:
+
+```powershell
+Copy-Item .env.example .env
+# Preencha MONOLITHFARM_DATA_ARCHIVE_URL no .env local.
+```
+
+O bootstrap usa:
+
+- `MONOLITHFARM_DATA_DIR`: destino local dos dados, por padrão `data`;
+- `MONOLITHFARM_DATA_ARCHIVE_URL`: URL privada do pacote compactado;
+- `MONOLITHFARM_DATA_COOKIE_FILE`: opcional, arquivo de cookies Netscape para links que exigem sessão autenticada;
+- `MONOLITHFARM_DATA_ARCHIVE_SHA256`: opcional, checksum esperado do pacote.
+
+O link real do pacote privado não aparece na documentação, no bundle frontend nem no `atlas-data.json`.
+
+## Deploy no Render
+
+Use um **Web Service**, não um Static Site, porque o Data Vault depende da API privada `/api/private/*`.
+
+Build command:
+
+```bash
+bash scripts/render_build.sh
+```
+
+Start command:
+
+```bash
+bash scripts/render_start.sh
+```
+
+Configure as variáveis de ambiente no Render:
+
+- `MONOLITHFARM_DATA_ARCHIVE_URL`: URL privada do pacote de dados;
+- `MONOLITHFARM_DATA_DIR`: `data`;
+- `MONOLITH_ATLAS_USER`: usuário do Data Vault;
+- `MONOLITH_ATLAS_PASSWORD`: senha do Data Vault;
+- `MONOLITH_ATLAS_COOKIE_SECURE`: `1`;
+- `MONOLITHFARM_DATA_ARCHIVE_SHA256`: opcional, checksum do pacote;
+- `MONOLITHFARM_DATA_COOKIE_FILE`: opcional, apenas se o provedor de download exigir cookies.
+
+Não coloque o link privado, usuário ou senha em código, README ou `render.yaml` público. Use somente variáveis de ambiente do serviço.
+
 ## Preparacao do Ambiente
 
 A preparacao abaixo usa `uv` para criar o ambiente e instalar dependencias, porque o `.venv` gerado por `uv` pode nao ter `pip`.
@@ -160,6 +211,84 @@ Apos iniciar, acessar:
 ```text
 http://127.0.0.1:8501
 ```
+
+## Execucao Rapida da Auditoria e Lineage
+
+### Atlas visual em React
+
+Para abrir a experiência visual recomendada:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_lineage_atlas.ps1 -Port 5173
+```
+
+Esse script:
+
+1. carrega `.env`;
+2. garante `data/` com `scripts/bootstrap_data.py`;
+3. gera `lineage_atlas/public/atlas-data.json` sem amostras privadas;
+4. inicia o Atlas React com a API privada do Data Vault.
+
+Acesse:
+
+```text
+http://127.0.0.1:5173
+```
+
+Para reconsultar também as páginas oficiais do FarmLab antes de abrir:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_lineage_atlas.ps1 -Port 5173 -RefreshDocs
+```
+
+O arquivo `lineage_atlas/public/atlas-data.json` é gerado a partir dos metadados reais, registries locais, manifesto de lineage e documentação extraída de `https://farm.labs.unimar.br/docs`.
+
+Por segurança, o JSON público não contém o conteúdo completo dos arquivos, previews reais ou auditoria linha-a-linha. A visualização integral de CSVs brutos, CSVs finais, tabelas intermediárias, arquivos de lineage/auditoria, imagens e documentos ocorre na página `Dados privados`, após login local, por endpoints `/api/private/*` com leitura paginada.
+
+### Atlas React/TypeScript
+
+Para abrir a plataforma de auditoria coluna-a-coluna:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_lineage_atlas.ps1 -Port 5173 -RefreshDocs
+```
+
+Ou, depois de gerar os dados do atlas:
+
+```bash
+npm --prefix lineage_atlas install
+npm --prefix lineage_atlas run dev -- --host 127.0.0.1 --port 5173
+```
+
+O comando legado `monolithfarm-audit` e os scripts `start_feature_lineage_app.*` agora redirecionam para o Atlas React. O app Streamlit geral em `dashboard/app.py` continua existindo para o dashboard operacional, mas não é mais a interface de lineage/NDVI.
+
+Acesse:
+
+```text
+http://127.0.0.1:5173
+```
+
+A rota recomendada para começar é `Visão geral`. Dali é possível seguir para `Canvas`, `Arquivos`, `Colunas`, `Features`, `Tabelas`, `CSVs finais`, `H1-H4`, `Correlações`, `Auditoria`, `Storytelling` e `Docs FarmLab`. As descrições de colunas brutas são enriquecidas com schemas extraídos de `https://farm.labs.unimar.br/docs`.
+
+Para gerar o manifesto canonico de rastreabilidade sem abrir a interface:
+
+```powershell
+monolithfarm-audit --export-manifest --outputs-only
+```
+
+Saidas geradas em `notebook_outputs/complete_ndvi/`:
+
+- `lineage_manifest.json`: manifesto completo de origem, transformacao, filtros, joins, thresholds, downstream, graficos, hipoteses, confianca e limitacoes;
+- `lineage_manifest.csv`: matriz coluna-a-coluna para auditoria tabular;
+- `lineage_coverage.csv`: cobertura por CSV final;
+- `lineage_critical_targets.csv`: gates dos alvos criticos como `solo_exposto`, `ndvi_mean_week`, `pest_risk_flag`, telemetria, pragas, colheita, clima e operacao;
+- `lineage_acceptance_gates.csv`: criterios objetivos para dizer se a leitura esta pronta ou se ainda ha bloqueio.
+
+Na página `Explorador de colunas`, pesquise termos como `solo_exposto`, `soil_pct_week`, `ndvi_mean_week`, `pest_risk_flag` e `harvest_yield_mean_kg_ha` para ver origem bruta, transformações, filtros, joins, agregações, thresholds, exemplos reais, problemas de qualidade, gráficos e hipóteses impactadas.
+
+A camada `Storytelling` conta a história da comparação para público técnico ou não técnico: de onde vieram os dados, o que foi tratado, onde o NDVI caiu, quais drivers aparecem nas semanas-problema, quais testes foram feitos e o que ainda limita a conclusão.
+
+Sobre performance: os CSVs brutos continuam como fonte oficial. A interface usa CSVs finais/manifesto cacheados e preview sob demanda; DuckDB é recomendado apenas como cache opcional para consultas pesadas nos arquivos EKOS grandes, não como substituto da origem bruta auditável.
 
 Para informar explicitamente a pasta `data/` deste repositorio:
 
@@ -205,6 +334,16 @@ O notebook detecta automaticamente a raiz do projeto e usa `./data` por padrao. 
 - `MONOLITHFARM_DATA_DIR`
 - `MONOLITHFARM_OUTPUT_DIR`
 - `MONOLITHFARM_PROFILE`
+
+O notebook tambem inclui uma camada de storytelling executavel para explicar o fluxo completo do projeto:
+
+- fontes brutas usadas;
+- filtros aplicados;
+- bases moldadas por dia/semana;
+- features e drivers gerados;
+- tecnicas usadas em cada etapa;
+- qualidade dos dados e outliers;
+- testes pareados, correlações, modelo interpretável e hipóteses H1-H4.
 
 Para nao commitar caminhos pessoais, use um arquivo local ignorado pelo Git:
 
@@ -262,24 +401,24 @@ Saidas principais:
 - `notebook_outputs/complete_ndvi/weekly_correlations.csv`
 - `notebook_outputs/complete_ndvi/review/review_summary.md`
 
-## App de Auditoria NDVI
-
-Linux/macOS:
-
-```bash
-./scripts/start_feature_lineage_app.sh
-```
+## Atlas de Auditoria NDVI
 
 Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start_feature_lineage_app.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\start_lineage_atlas.ps1 -Port 5173
+```
+
+Linux/macOS:
+
+```bash
+./scripts/start_feature_lineage_app.sh 5173
 ```
 
 URL esperada:
 
 ```text
-http://127.0.0.1:8502
+http://127.0.0.1:5173
 ```
 
 ## Protecao de Dados e Artefatos Locais
