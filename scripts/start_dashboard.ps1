@@ -26,7 +26,8 @@ function Resolve-DefaultDataDir {
 }
 
 function Resolve-VenvPython {
-    if ($IsWindows) {
+    $isWindowsHost = ($env:OS -eq "Windows_NT") -or ([System.IO.Path]::DirectorySeparatorChar -eq "\")
+    if ($isWindowsHost) {
         return Join-Path (Get-Location) ".venv\Scripts\python.exe"
     }
 
@@ -52,13 +53,21 @@ function Ensure-Environment {
     }
 
     Write-Host "Instalando dependencias do projeto..."
-    try {
-        & $PythonPath -m pip --version | Out-Null
+    & $PythonPath -m pip --version | Out-Null
+    $hasPip = ($LASTEXITCODE -eq 0)
+
+    if ($hasPip) {
         & $PythonPath -m pip install -e . | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "Falha ao instalar dependencias com pip."
+        }
     }
-    catch {
+    else {
         if (Get-Command uv -ErrorAction SilentlyContinue) {
             uv pip install --python $PythonPath -e . | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+                throw "Falha ao instalar dependencias com uv."
+            }
         }
         else {
             throw "pip nao esta disponivel no ambiente virtual e uv nao foi encontrado."
