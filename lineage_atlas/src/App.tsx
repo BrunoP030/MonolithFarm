@@ -89,6 +89,9 @@ const EDGE_COLORS = {
 
 const NAV: Array<[string, string, IconComponent]> = [
   ['overview', 'Visão geral', Sparkles],
+  ['project', 'Entenda', BookOpen],
+  ['objectives', 'Objetivos', ShieldCheck],
+  ['dataflow', 'Fluxo dos dados', Network],
   ['canvas', 'Canvas', Waypoints],
   ['files', 'Arquivos', Database],
   ['vault', 'Dados privados', Lock],
@@ -105,6 +108,7 @@ const NAV: Array<[string, string, IconComponent]> = [
 
 const CATEGORY_FILTERS = ['rawFile', 'rawColumn', 'intermediate', 'feature', 'driver', 'csv', 'csvColumn', 'hypothesis', 'chart'];
 const PRIVATE_API_START_COMMAND = 'powershell -ExecutionPolicy Bypass -File .\\scripts\\start_lineage_atlas.ps1 -Port 5173';
+const NAV_KEYS = new Set(NAV.map(([key]) => key));
 
 async function apiJson(url: string, options: RequestInit = {}) {
   const response = await fetch(url, { credentials: 'include', ...options });
@@ -144,10 +148,15 @@ function privateApiMessage(error: any) {
   return error?.message || String(error);
 }
 
+function initialPageFromUrl() {
+  const page = new URLSearchParams(window.location.search).get('page') || 'overview';
+  return NAV_KEYS.has(page) ? page : 'overview';
+}
+
 function App() {
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
-  const [activePage, setActivePage] = useState('overview');
+  const [activePage, setActivePageState] = useState(() => initialPageFromUrl());
   const [query, setQuery] = useState('');
   const [graphMode, setGraphMode] = useState('focus');
   const [detailLevel, setDetailLevel] = useState('curated');
@@ -208,10 +217,18 @@ function App() {
     refreshPrivateAuth();
   }, [refreshPrivateAuth]);
 
+  const setActivePage = useCallback((page) => {
+    const nextPage = NAV_KEYS.has(page) ? page : 'overview';
+    setActivePageState(nextPage);
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', nextPage);
+    window.history.replaceState(null, '', url);
+  }, []);
+
   const openVault = useCallback((search = '') => {
     setVaultQuery(search);
     setActivePage('vault');
-  }, []);
+  }, [setActivePage]);
 
   const index = useMemo(() => (data ? buildIndex(data) : null), [data]);
   const selected = useMemo(() => (data && index ? describeObject(selectedId, data, index) : null), [data, index, selectedId]);
@@ -278,6 +295,9 @@ function App() {
       <main className="main-surface">
         {!isVaultPage && <Header data={data} activePage={activePage} selected={selected} />}
         {activePage === 'overview' && <OverviewPage data={data} setActivePage={setActivePage} />}
+        {activePage === 'project' && <ProjectUnderstandingPage data={data} setActivePage={setActivePage} />}
+        {activePage === 'objectives' && <ObjectivesAndHypothesesPage data={data} setActivePage={setActivePage} />}
+        {activePage === 'dataflow' && <DataFlowExplanationPage data={data} setActivePage={setActivePage} />}
         {activePage === 'canvas' && (
           <CanvasPage
             data={data}
@@ -320,6 +340,9 @@ function App() {
 function Header({ data, activePage, selected }) {
   const title = {
     overview: 'Visão geral',
+    project: 'Entenda o Projeto',
+    objectives: 'Objetivos e hipóteses',
+    dataflow: 'Como os dados fluíram',
     canvas: 'Canvas de lineage',
     files: 'Arquivos brutos',
     vault: 'Dados privados',
@@ -381,10 +404,12 @@ function OverviewPage({ data, setActivePage }) {
 
       <div className="journey-grid">
         {[
-          ['1. Brutos', 'Arquivos reais em data/: OneSoil, Metos, EKOS, MIIP e Cropman.', 'files'],
-          ['2. Colunas', 'Dicionário oficial/inferido, exemplos reais, nulos e uso no pipeline.', 'columns'],
-          ['3. Features', 'Transformações como b1_mean -> ndvi_mean_week e b1_pct_solo -> soil_pct_week.', 'features'],
-          ['4. Evidência', 'CSVs, correlações, gráficos, hipóteses e auditoria por semana.', 'canvas'],
+          ['1. Entenda', 'Problema, metas, situação dos dados e legenda de evidências.', 'project'],
+          ['2. Objetivos', 'Hipótese principal, perguntas técnicas e riscos de interpretação.', 'objectives'],
+          ['3. Fluxo', 'Como brutos, features, drivers, CSVs e hipóteses se conectam.', 'dataflow'],
+          ['4. Brutos', 'Arquivos reais em data/: OneSoil, Metos, EKOS, MIIP e Cropman.', 'files'],
+          ['5. Colunas', 'Dicionário oficial/inferido, nulos e uso no pipeline.', 'columns'],
+          ['6. Evidência', 'CSVs, correlações, gráficos, hipóteses e auditoria por semana.', 'canvas'],
         ].map(([title, text, page]) => (
           <button key={title} className="journey-card" onClick={() => setActivePage(page)}>
             <span>{title}</span>
@@ -403,6 +428,173 @@ function OverviewPage({ data, setActivePage }) {
           <h2>Gates críticos</h2>
           <StatusList rows={data.criticalTargets || []} primary="target" secondary="business_reason" status="status" />
         </section>
+      </div>
+    </section>
+  );
+}
+
+function ProjectUnderstandingPage({ data, setActivePage }) {
+  const objectives = data.projectObjectives || {};
+  const central = objectives.centralProblem?.[0] || {};
+  return (
+    <section className="objective-page">
+      <div className="objective-hero">
+        <div>
+          <p className="eyebrow">Entenda o Projeto</p>
+          <h2>{central.title || 'Comparação entre manejo convencional e tecnologias 4.0'}</h2>
+          <p>{central.statement || 'O Atlas conecta objetivo, dados, variáveis, evidências e limitações em uma leitura auditável.'}</p>
+        </div>
+        <FactGrid facts={[
+          ['Fonte central', 'info.md'],
+          ['Leitura', central.interpretationStatus || 'objetivo_do_projeto'],
+          ['Dados completos', 'Data Vault'],
+          ['JSON público', data.meta?.privateSamplesRedacted ? 'sem amostras privadas' : 'modo local'],
+        ]} />
+      </div>
+
+      <div className="objective-grid two-up">
+        <ObjectiveSection title="Objetivos de negócio/acadêmicos" rows={objectives.businessAcademicGoals} primary="title" secondary="statement" badge="interpretationStatus" />
+        <ObjectiveSection title="Situação atual dos dados" rows={objectives.currentDataSituation} primary="topic" secondary="detail" badge="status" />
+      </div>
+
+      <section className="content-panel">
+        <div className="section-title">
+          <div>
+            <h2>Como diferenciar evidência, hipótese e limitação</h2>
+            <p>O Atlas usa esta legenda para evitar que associação estatística vire causalidade ou que objetivo vire resultado provado.</p>
+          </div>
+          <button className="secondary-action" onClick={() => setActivePage('columns')}><Table2 size={15} /> abrir variáveis</button>
+        </div>
+        <div className="evidence-legend-grid">
+          {(objectives.evidenceLegend || []).map((item) => (
+            <article key={item.label}>
+              <span>{item.label}</span>
+              <p>{item.meaning}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function ObjectivesAndHypothesesPage({ data, setActivePage }) {
+  const objectives = data.projectObjectives || {};
+  return (
+    <section className="objective-page">
+      <div className="objective-grid three-up">
+        <ObjectiveSection title="Tópicos prioritários" rows={objectives.priorityTopics} primary="name" secondary="expectedEvidence" badge="domain" />
+        <ObjectiveSection title="Hipótese principal" rows={objectives.mainHypothesis} primary="title" secondary="statement" badge="evidenceType" />
+        <ObjectiveSection title="Riscos de interpretação" rows={objectives.interpretationRisks} primary="risk" secondary="mitigation" badge="evidenceType" />
+      </div>
+
+      <section className="content-panel">
+        <div className="section-title">
+          <div>
+            <h2>Perguntas técnicas que precisam ser respondidas</h2>
+            <p>Cada pergunta mantém o status atual explícito para não vender conclusão bloqueada por ausência de dado.</p>
+          </div>
+          <button className="secondary-action" onClick={() => setActivePage('correlations')}><LineChart size={15} /> abrir correlações</button>
+        </div>
+        <div className="question-list">
+          {(objectives.technicalQuestions || []).map((item) => (
+            <article key={item.question}>
+              <strong>{item.question}</strong>
+              <span>{item.currentAnswerStatus}</span>
+              <p>{item.safeInterpretation}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="content-panel">
+        <div className="section-title">
+          <div>
+            <h2>Hipóteses H1-H4 do pipeline</h2>
+            <p>Estas hipóteses são implementadas no registry de lineage e conectadas a CSVs, gráficos e limitações.</p>
+          </div>
+          <button className="secondary-action" onClick={() => setActivePage('hypotheses')}><ShieldCheck size={15} /> abrir H1-H4</button>
+        </div>
+        <div className="feature-grid">
+          {(data.hypotheses || []).map((hyp) => (
+            <button key={hyp.id || hyp.key} onClick={() => setActivePage('hypotheses')}>
+              <span>{hyp.id || hyp.key}</span>
+              <strong>{hyp.title}</strong>
+              <p>{hyp.question}</p>
+              <small>{hyp.limitations?.join?.(' | ') || hyp.decision_rule}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function DataFlowExplanationPage({ data, setActivePage }) {
+  const objectives = data.projectObjectives || {};
+  const flowCards = [
+    ['1. Fontes brutas', `${data.summary.rawFiles} arquivos catalogados sem expor linhas completas`, 'files'],
+    ['2. Catálogo universal', `${data.summary.rawColumns} colunas brutas + colunas finais com documentação`, 'columns'],
+    ['3. Feature store', `${data.summary.features} features e ${data.summary.drivers} drivers rastreáveis`, 'features'],
+    ['4. Saídas finais', `${data.summary.finalCsvs} CSVs finais com lineage e gates`, 'csvs'],
+    ['5. Evidência', 'Hipóteses, correlações e storytelling com caveats explícitos', 'story'],
+  ];
+  return (
+    <section className="objective-page">
+      <div className="flow-ribbon">
+        {flowCards.map(([title, text, page]) => (
+          <button key={title} onClick={() => setActivePage(page)}>
+            <span>{title}</span>
+            <strong>{text}</strong>
+            <ArrowRight size={15} />
+          </button>
+        ))}
+      </div>
+
+      <div className="objective-grid two-up">
+        <ObjectiveSection title="Plano de execução recomendado" rows={objectives.recommendedExecutionPlan} primary="title" secondary="deliverable" badge="status" />
+        <ObjectiveSection title="Apoio de domínio necessário" rows={objectives.domainSupport} primary="need" secondary="detail" badge="need" />
+      </div>
+
+      <section className="content-panel">
+        <div className="section-title">
+          <div>
+            <h2>Contrato público do Atlas</h2>
+            <p>O arquivo público deve explicar estrutura, schemas e lineage sem vazar dados completos, caminhos locais ou previews sensíveis.</p>
+          </div>
+          <button className="secondary-action" onClick={() => setActivePage('vault')}><Lock size={15} /> abrir Data Vault</button>
+        </div>
+        <StatusList rows={data.acceptanceGates || []} primary="gate_id" secondary="evidence" status="status" />
+      </section>
+
+      <section className="content-panel">
+        <h2>Links de referência</h2>
+        <div className="doc-list compact">
+          {(objectives.referenceLinks || []).map((item) => (
+            <article key={item.url}>
+              <span>{item.sourceType}</span>
+              <strong>{item.label}</strong>
+              <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>
+            </article>
+          ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function ObjectiveSection({ title, rows = [], primary, secondary, badge }) {
+  return (
+    <section className="content-panel objective-section">
+      <h2>{title}</h2>
+      <div className="objective-list">
+        {rows.map((row, index) => (
+          <article key={`${title}-${row[primary] || index}`}>
+            <span>{row[badge] || row.evidenceType || row.status || 'documentado'}</span>
+            <strong>{row[primary]}</strong>
+            <p>{row[secondary]}</p>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -477,7 +669,7 @@ function CanvasPage({
         <span title="Violeta: CSV ou driver gera gráfico."><i style={{ background: EDGE_COLORS.generates_chart }} />violeta: gráfico</span>
       </div>
       <div className="graph-hint">
-        Setas apontam de origem para uso. O modo Curado oculta colunas massivas no canvas; os detalhes completos ficam no painel e nas páginas Colunas/CSVs.
+        Setas apontam de origem para uso. Ao clicar em um nó no modo Vizinhança, o canvas abre uma fatia direcionada do fluxo: origens à esquerda, evidências e hipóteses à direita.
       </div>
 
       <div className="canvas-stage">
@@ -490,8 +682,8 @@ function CanvasPage({
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
           fitView
-          fitViewOptions={{ padding: 0.18 }}
-          minZoom={0.12}
+          fitViewOptions={{ padding: 0.24 }}
+          minZoom={0.06}
           maxZoom={1.7}
           defaultEdgeOptions={{ animated: false, type: 'smoothstep' }}
           proOptions={{ hideAttribution: true }}
@@ -587,6 +779,7 @@ function FeaturesPage({ data, query, setQuery, onSelect }) {
   const q = normalize(query);
   const features = data.features.filter((feature) => !q || normalize(JSON.stringify(feature)).includes(q));
   const drivers = (data.drivers || []).filter((driver) => !q || normalize(JSON.stringify(driver)).includes(q));
+  const groupedFeatures = groupBy(features, (feature) => featureTypeLabel(feature.feature_type || feature.category));
   return (
     <section className="table-page features-page">
       <div className="features-education">
@@ -601,7 +794,37 @@ function FeaturesPage({ data, query, setQuery, onSelect }) {
         </div>
         <span>{features.length} variáveis</span>
       </div>
-      <div className="feature-grid">
+      <FeatureTypeGuide />
+      <div className="feature-group-stack">
+        {Object.entries(groupedFeatures).map(([group, rows]) => (
+          <section key={group} className="feature-group">
+            <div className="feature-group-head">
+              <div>
+                <h3>{group}</h3>
+                <p>{featureGroupExplanation(group)}</p>
+              </div>
+              <span>{rows.length}</span>
+            </div>
+            <div className="feature-grid">
+              {rows.map((feature) => (
+                <button key={feature.id} onClick={() => onSelect(feature.id)}>
+                  <span>{featureDomain(feature)}</span>
+                  <strong>{feature.name}</strong>
+                  <p>{featurePlainExplanation(feature)}</p>
+                  <div className="feature-card-recipe">
+                    <em>Entrada: {compactList(splitAny(feature.source_columns), 2)}</em>
+                    <em>Regra: {truncate(feature.transformation || feature.definition, 96)}</em>
+                    <em>Uso: {compactList(splitAny(feature.appears_in_csvs || feature.related_charts), 2)}</em>
+                  </div>
+                  <small>{feature.table_where_born || feature.born_table} · {feature.function}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      {!features.length && <EmptyResult />}
+      <div className="feature-grid legacy-feature-grid">
         {features.map((feature) => (
           <button key={feature.id} onClick={() => onSelect(feature.id)}>
             <span>{feature.feature_type || feature.category}</span>
@@ -650,6 +873,25 @@ function VariableReadingGuide() {
       <p>
         Convenção útil: <code>_week</code> costuma ser agregação semanal; <code>_flag</code> marca evento por regra/threshold; <code>_share</code> é proporção; <code>_count</code> é contagem; <code>_rate</code> é frequência; <code>_gap</code> é diferença entre tratamentos ou valor esperado/aplicado.
       </p>
+    </section>
+  );
+}
+
+function FeatureTypeGuide() {
+  const cards = [
+    ['Derivadas', 'Renomeiam, limpam ou calculam um valor direto a partir do bruto. Ex.: b1_mean vira ndvi_mean.'],
+    ['Agregadas', 'Resumem valores por dia, semana ou área. Ex.: ndvi_mean vira ndvi_mean_week.'],
+    ['Flags', 'Transformam uma medida em sim/não usando regra ou limiar. Ex.: solo alto vira high_soil_flag.'],
+    ['Scores', 'Somam ou acumulam sinais para resumir intensidade. Ex.: risk_flag_count.'],
+  ];
+  return (
+    <section className="feature-type-guide">
+      {cards.map(([title, text]) => (
+        <article key={title}>
+          <strong>{title}</strong>
+          <p>{text}</p>
+        </article>
+      ))}
     </section>
   );
 }
@@ -1343,7 +1585,7 @@ function DetailPanel({ selected, data, index, onSelect, onOpenPrivateFile }) {
       {kind === 'csv' && <CsvDetail item={item} onSelect={onSelect} onOpenPrivateFile={onOpenPrivateFile} />}
       {kind === 'csvColumn' && <CsvColumnDetail item={item} lineage={lineage} onSelect={onSelect} />}
       {kind === 'hypothesis' && <HypothesisDetail item={item} data={data} onSelect={onSelect} />}
-      {kind === 'chart' && <ChartDetail item={item} data={data} />}
+      {kind === 'chart' && <ChartDetail item={item} data={data} onOpenPrivateFile={onOpenPrivateFile} />}
       <section className="panel-section">
         <h3>Por que importa</h3>
         <p>{selected.why || 'Ajuda a conectar evidência operacional, NDVI e decisão 4.0 versus convencional.'}</p>
@@ -1416,6 +1658,7 @@ function FeatureDetail({ item, onSelect }) {
   return (
     <>
       <FactGrid facts={[['Tipo', item.feature_type || item.category], ['Nasce em', item.table_where_born || item.born_table], ['Função', item.function], ['Arquivo', item.file_path]]} />
+      <FeatureRecipe item={item} />
       <FeatureMethodExplainer item={item} />
       <ListBlock title="Colunas de entrada" values={splitAny(item.source_columns)} onClick={(value) => onSelect(`raw-column:any:${value}`)} />
       <ListBlock title="Fontes brutas" values={splitAny(item.raw_sources)} />
@@ -1489,16 +1732,70 @@ function HypothesisDetail({ item, data, onSelect }) {
   );
 }
 
-function ChartDetail({ item, data }) {
+function ChartDetail({ item, data, onOpenPrivateFile }) {
+  const artifact = chartArtifact(item?.key);
+  const sourceName = item?.dataframe_sources?.[0] || '';
   return (
     <>
-      <ChartPreview chart={item} data={data} />
+      <ChartPreview chart={item} data={data} onOpenPrivateFile={onOpenPrivateFile} />
+      {artifact && (
+        <section className="panel-section private-open-block">
+          <h3>Gráfico interativo gerado</h3>
+          <p>O HTML renderizado fica no Data Vault autenticado para não expor amostras privadas no JSON público.</p>
+          <button type="button" onClick={() => onOpenPrivateFile?.(artifact)}>
+            <ArrowRight size={15} /> Abrir {artifact}
+          </button>
+        </section>
+      )}
+      {sourceName && (
+        <section className="panel-section private-open-block">
+          <h3>CSV de origem</h3>
+          <p>Abra a tabela usada para desenhar este gráfico e audite as linhas que alimentam a visualização.</p>
+          <button type="button" onClick={() => onOpenPrivateFile?.(sourceName)}>
+            <Table2 size={15} /> Abrir {sourceName}
+          </button>
+        </section>
+      )}
       <section className="panel-section"><h3>Leitura esperada</h3><p>{item.interpretation}</p></section>
       <ListBlock title="Dataframes de origem" values={item.dataframe_sources} />
       <section className="panel-section"><h3>Cálculo</h3><p>{item.calculation_origin}</p></section>
       <ChartMethodExplainer chart={item} />
       <CodeBlock code={item.chart_code} />
     </>
+  );
+}
+
+function FeatureRecipe({ item }) {
+  const inputs = splitAny(item.source_columns);
+  const rawSources = splitAny(item.raw_sources);
+  const outputs = splitAny(item.appears_in_csvs || item.related_charts);
+  const type = featureTypeLabel(item.feature_type || item.category);
+  return (
+    <section className="panel-section feature-recipe">
+      <div className="method-heading">
+        <span>{type}</span>
+        <h3>Receita da feature</h3>
+      </div>
+      <p>{featurePlainExplanation(item)}</p>
+      <div className="feature-recipe-flow">
+        <article>
+          <span>1. Entrada</span>
+          <strong>{compactList(inputs, 3)}</strong>
+          <p>{rawSources.length ? compactList(rawSources, 2) : 'Fonte inferida pela tabela onde a feature nasce.'}</p>
+        </article>
+        <article>
+          <span>2. Transformação</span>
+          <strong>{item.transformation || item.definition || 'Regra documentada no código gerador.'}</strong>
+          <p>{item.function ? `${item.function} em ${item.file_path || item.module}` : 'Função geradora não informada.'}</p>
+        </article>
+        <article>
+          <span>3. Uso</span>
+          <strong>{compactList(outputs, 3)}</strong>
+          <p>{compactList(splitAny(item.related_hypotheses || item.hypotheses), 4)}</p>
+        </article>
+      </div>
+      <p className="method-note">{featureCaution(item)}</p>
+    </section>
   );
 }
 
@@ -1686,19 +1983,31 @@ function eventDriverColumnRoles() {
   ];
 }
 
-function ChartPreview({ chart, data }) {
+function ChartPreview({ chart, data, onOpenPrivateFile }) {
   const source = findChartSource(chart, data);
   const rows = source?.preview || [];
   const config = chartConfig(chart?.key, rows);
+  const sourceName = source?.name || chart.dataframe_sources?.[0] || '';
   return (
     <section className="panel-section">
       <h3>Prévia do gráfico</h3>
       <div className="chart-preview">
         <div className="chart-preview-head">
           <strong>{chart.title || chart.key}</strong>
-          <span>{source?.name || chart.dataframe_sources?.[0] || 'fonte não encontrada'}</span>
+          <span>{sourceName || 'fonte não encontrada'}</span>
         </div>
-        {!rows.length && <p className="detail-desc">Sem preview suficiente no CSV de origem para desenhar este gráfico.</p>}
+        {!rows.length && (
+          <div className="chart-preview-empty">
+            <p className="detail-desc">
+              O preview público está vazio porque as amostras dos CSVs foram removidas do bundle. Use o Data Vault para abrir o gráfico/CSV completo.
+            </p>
+            {sourceName && (
+              <button type="button" onClick={() => onOpenPrivateFile?.(sourceName)}>
+                <Lock size={14} /> Abrir dados privados
+              </button>
+            )}
+          </div>
+        )}
         {rows.length > 0 && config.kind === 'line' && <LinePreview rows={config.rows} xKey={config.xKey} yKey={config.yKey} seriesKey={config.seriesKey} />}
         {rows.length > 0 && config.kind === 'scatter' && <ScatterPreview rows={config.rows} xKey={config.xKey} yKey={config.yKey} seriesKey={config.seriesKey} />}
         {rows.length > 0 && config.kind === 'matrix' && <MatrixPreview rows={config.rows} />}
@@ -2064,6 +2373,9 @@ function computeVisibleGraph(graph, index, { query, selectedId, graphMode, enabl
     for (const seed of focusSeeds.slice(0, 8)) {
       for (const id of collectNeighborhood(index.adjacency, seed, focusRadius)) keep.add(id);
     }
+    if (selectedResolved && !q) {
+      for (const id of collectFlowPath(graph.edges, selectedResolved, detailLevel)) keep.add(id);
+    }
   }
 
   if (selectedResolved && !q) {
@@ -2158,7 +2470,7 @@ function curatedFocusAllows(selectedKind, candidateKind) {
 }
 
 function limitGraphNodes(nodes, rawEdges, { selectedId, matches, graphMode, detailLevel }) {
-  const maxNodes = graphMode === 'all' ? 180 : graphMode === 'columns' ? 120 : detailLevel === 'expanded' ? 110 : 56;
+  const maxNodes = graphMode === 'all' ? 220 : graphMode === 'columns' ? 150 : detailLevel === 'expanded' ? 150 : 88;
   if (nodes.length <= maxNodes) return nodes;
 
   const directNeighbors = new Set();
@@ -2199,7 +2511,7 @@ function graphKindPriority(kind) {
 }
 
 function limitGraphEdges(edges, { selectedId, matches, graphMode, detailLevel }) {
-  const maxEdges = graphMode === 'all' ? 300 : graphMode === 'columns' ? 180 : detailLevel === 'expanded' ? 180 : 100;
+  const maxEdges = graphMode === 'all' ? 360 : graphMode === 'columns' ? 230 : detailLevel === 'expanded' ? 240 : 145;
   if (edges.length <= maxEdges) return edges;
   return [...edges]
     .sort((a, b) => {
@@ -2252,13 +2564,13 @@ function layoutSequenceNodes(nodes, edges, { focusView, selectedId, seeds }) {
   const normalizedLayer = (node) => Number(layerById.get(node.id) ?? 0) - minLayer;
   const grouped = groupBy(nodes, (node) => String(normalizedLayer(node)));
   const positioned = [];
-  const layerGap = focusView ? 250 : 285;
-  const columnGap = focusView ? 188 : 198;
-  const rowGap = focusView ? 88 : 94;
+  const layerGap = focusView ? 360 : 390;
+  const columnGap = focusView ? 255 : 270;
+  const rowGap = focusView ? 118 : 126;
 
   for (const layerKey of Object.keys(grouped).sort((a, b) => Number(a) - Number(b))) {
     const rows = grouped[layerKey].sort((a, b) => sequenceSort(a, b, selectedId, direct));
-    const rowsPerColumn = focusView ? 11 : rows.length > 22 ? 10 : 12;
+    const rowsPerColumn = focusView ? 7 : rows.length > 22 ? 7 : 8;
     rows.forEach((node, index) => {
       const column = Math.floor(index / rowsPerColumn);
       const row = index % rowsPerColumn;
@@ -2266,7 +2578,7 @@ function layoutSequenceNodes(nodes, edges, { focusView, selectedId, seeds }) {
         ...node,
         position: {
           x: Number(layerKey) * layerGap + column * columnGap,
-          y: 36 + row * rowGap,
+          y: 46 + row * rowGap,
         },
       });
     });
@@ -2415,6 +2727,15 @@ function findChartSource(chart, data) {
   });
 }
 
+function chartArtifact(key) {
+  return {
+    ndvi_weekly_by_area: 'review/ndvi_trends.html',
+    outliers_ndvi: 'review/ndvi_outliers.html',
+    correlations: 'review/weekly_correlations.html',
+    hypothesis_h1_effect: 'review/pair_classic_tests.html',
+  }[key] || '';
+}
+
 function chartConfig(key, rows) {
   const configs = {
     ndvi_weekly_by_area: { kind: 'line', xKey: 'week_start', yKey: 'ndvi_mean_week', seriesKey: 'area_label' },
@@ -2471,6 +2792,44 @@ function collectNeighborhood(adjacency, start, radius) {
   return seen;
 }
 
+function collectFlowPath(edges, start, detailLevel) {
+  const forward = new Map();
+  const backward = new Map();
+  for (const edge of edges) {
+    if (!forward.has(edge.source)) forward.set(edge.source, []);
+    if (!backward.has(edge.target)) backward.set(edge.target, []);
+    forward.get(edge.source).push(edge.target);
+    backward.get(edge.target).push(edge.source);
+  }
+
+  const maxDepth = detailLevel === 'expanded' ? 8 : 6;
+  const maxPerStep = detailLevel === 'expanded' ? 22 : 14;
+  const maxTotal = detailLevel === 'expanded' ? 160 : 96;
+  const seen = new Set([start]);
+
+  const walk = (map) => {
+    let frontier = [start];
+    for (let depth = 0; depth < maxDepth && frontier.length && seen.size < maxTotal; depth += 1) {
+      const next = [];
+      for (const id of frontier) {
+        const neighbors = (map.get(id) || []).slice(0, maxPerStep);
+        for (const neighbor of neighbors) {
+          if (seen.size >= maxTotal) break;
+          if (!seen.has(neighbor)) {
+            seen.add(neighbor);
+            next.push(neighbor);
+          }
+        }
+      }
+      frontier = next;
+    }
+  };
+
+  walk(backward);
+  walk(forward);
+  return seen;
+}
+
 function resolveLooseId(id, index) {
   if (!id) return id;
   if (index.nodeById.has(id)) return id;
@@ -2502,6 +2861,63 @@ function typeFromId(id) {
   if (id.startsWith('hypothesis:')) return 'hypothesis';
   if (id.startsWith('chart:')) return 'chart';
   return 'unknown';
+}
+
+function featureTypeLabel(type) {
+  const normalized = normalize(type);
+  if (normalized.includes('derivada')) return 'Derivadas';
+  if (normalized.includes('agregada')) return 'Agregadas';
+  if (normalized.includes('flag')) return 'Flags';
+  if (normalized.includes('score')) return 'Scores';
+  return 'Outras features';
+}
+
+function featureGroupExplanation(group) {
+  return {
+    Derivadas: 'Primeiro tratamento do bruto: renomeação, diferença, proporção ou cálculo direto.',
+    Agregadas: 'Resumo temporal/espacial usado para comparar áreas por semana, safra ou operação.',
+    Flags: 'Regras booleanas que marcam semanas com evento, risco ou condição relevante.',
+    Scores: 'Índices que acumulam sinal ao longo do tempo ou somam múltiplas flags.',
+  }[group] || 'Variáveis auxiliares usadas para manter o pipeline rastreável.';
+}
+
+function featureDomain(feature) {
+  const text = normalize(`${feature.name} ${feature.definition} ${feature.raw_sources} ${feature.source_columns}`);
+  if (/ndvi|veg|soil|solo|vigor/.test(text)) return 'NDVI / cobertura';
+  if (/weather|clima|precip|water|temp|humidity|umidade|balanco/.test(text)) return 'clima';
+  if (/pest|praga|trap|miip/.test(text)) return 'pragas';
+  if (/engine|motor|fuel|telemetry|alarm|alert|maquina|rotation/.test(text)) return 'máquina';
+  if (/fert|dose|overlap|stop|parad|planting|harvest|yield|oper/.test(text)) return 'operação';
+  if (/risk|flag|score/.test(text)) return 'risco';
+  return feature.feature_type || 'feature';
+}
+
+function featurePlainExplanation(feature) {
+  const name = String(feature.name || '');
+  const type = featureTypeLabel(feature.feature_type || feature.category);
+  const source = compactList(splitAny(feature.source_columns), 2);
+  const transform = feature.transformation || feature.definition || 'regra documentada no código';
+  if (type === 'Flags') {
+    return `Marca uma semana como verdadeira/falsa usando ${source}. Regra: ${transform}.`;
+  }
+  if (type === 'Agregadas') {
+    return `Resume ${source} para o nível usado na comparação, normalmente por área e semana.`;
+  }
+  if (type === 'Derivadas') {
+    return `Cria ${name} a partir de ${source}, preservando a rastreabilidade do bruto.`;
+  }
+  if (type === 'Scores') {
+    return `Condensa múltiplos sinais em um número para comparar intensidade ou acúmulo de risco.`;
+  }
+  return feature.definition || transform;
+}
+
+function featureCaution(feature) {
+  const type = featureTypeLabel(feature.feature_type || feature.category);
+  if (type === 'Flags') return 'Leia como triagem: a flag facilita contar semanas e calcular lift, mas não substitui o valor bruto nem prova causalidade sozinha.';
+  if (type === 'Agregadas') return 'Como é agregação, confira a janela temporal e a cobertura antes de interpretar diferença entre áreas.';
+  if (type === 'Scores') return 'Score resume vários sinais; use-o junto das flags individuais para saber qual driver pesou mais.';
+  return 'Confira a coluna bruta e a função geradora quando precisar defender o cálculo em apresentação.';
 }
 
 function featureMethodInfo(name: string) {
@@ -2596,6 +3012,13 @@ function splitAny(value: any): string[] {
   if (!value) return [];
   if (Array.isArray(value)) return value.filter(Boolean).map(String);
   return String(value).split('|').flatMap((part) => part.split(',')).map((part) => part.trim()).filter(Boolean);
+}
+
+function compactList(values: any[], limit = 3): string {
+  const clean = values.filter(Boolean).map(String);
+  if (!clean.length) return 'n/a';
+  if (clean.length <= limit) return clean.join(', ');
+  return `${clean.slice(0, limit).join(', ')} +${clean.length - limit}`;
 }
 
 function normalize(value: any): string {
