@@ -33,23 +33,28 @@ def load_resolved_paths(project_dir: Path | None = None, profile_name: str | Non
     _load_dotenv(root / ".env")
     config_path = _find_config_path(root)
     config = _read_paths_config(config_path) if config_path else {}
-    selected_profile = profile_name or config.get("default_profile", "local")
+    env_profile = os.environ.get("MONOLITHFARM_PROFILE") or None
+    forced_profile = profile_name or env_profile
+    selected_profile = forced_profile or config.get("default_profile", "local")
     profile = config.get("profiles", {}).get(selected_profile, {})
 
     project_path = _resolve_path(profile.get("project_dir"), root) or root
     env_data_dir = os.environ.get("MONOLITHFARM_DATA_DIR")
     data_path = _resolve_path(env_data_dir, project_path) or _resolve_path(profile.get("data_dir"), project_path) or (project_path / "data")
     output_root = _resolve_path(profile.get("output_root"), project_path) or (project_path / "notebook_outputs")
-    if profile_name is None and not data_path.exists() and selected_profile != "local":
+    output_dir_candidate = output_root / "complete_ndvi"
+    if forced_profile is None and selected_profile != "local" and (not data_path.exists() or not output_dir_candidate.exists()):
         # Fallback util quando o profile default aponta para WSL, mas o app esta rodando no Windows.
         local_profile = config.get("profiles", {}).get("local", {})
         local_project = _resolve_path(local_profile.get("project_dir"), root) or root
         local_data = _resolve_path(local_profile.get("data_dir"), local_project) or (local_project / "data")
-        if local_data.exists():
+        local_output_root = _resolve_path(local_profile.get("output_root"), local_project) or (local_project / "notebook_outputs")
+        local_output_dir = local_output_root / "complete_ndvi"
+        if local_data.exists() and (not data_path.exists() or local_output_dir.exists()):
             selected_profile = "local"
             project_path = local_project
             data_path = local_data
-            output_root = _resolve_path(local_profile.get("output_root"), local_project) or (local_project / "notebook_outputs")
+            output_root = local_output_root
     output_dir = (output_root / "complete_ndvi").resolve()
     return ResolvedPaths(
         project_dir=project_path.resolve(),

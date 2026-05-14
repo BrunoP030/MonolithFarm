@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -18,6 +19,7 @@ from dashboard.lineage.column_lineage import build_column_lineage_index, build_l
 from dashboard.lineage.doc_scraper import build_documentation_index, load_or_refresh_documentation_cache
 from dashboard.lineage.docs_registry import DRIVER_DOCUMENTATION
 from dashboard.lineage.manifest import build_critical_lineage_report, build_lineage_acceptance_gates
+from dashboard.lineage.project_objectives import project_objectives
 from dashboard.lineage.registry import (
     CHART_REGISTRY,
     CSV_LINEAGE_ORDER,
@@ -104,19 +106,22 @@ def main() -> None:
     lineage_index = build_column_lineage_index(raw_columns, None, outputs)
     coverage = build_lineage_coverage_report(lineage_index, outputs)
     critical = build_critical_lineage_report(lineage_index)
-    gates = build_lineage_acceptance_gates(lineage_index, coverage, critical, outputs, None)
+    quality_summary = outputs.get("data_audit.csv")
+    gates = build_lineage_acceptance_gates(lineage_index, coverage, critical, outputs, quality_summary)
     workspace_columns = build_workspace_column_catalog(None, outputs)
 
     payload = {
         "meta": {
             "project": "MonolithFarm Atlas NDVI",
-            "projectDir": str(paths.project_dir),
-            "dataDir": str(paths.data_dir),
-            "outputDir": str(paths.output_dir),
+            "projectDir": ".",
+            "dataDir": "data",
+            "outputDir": "notebook_outputs/complete_ndvi",
             "profile": paths.profile_name,
             "docsGeneratedAt": docs_cache.get("generated_at"),
+            "pathPolicy": "O JSON publico usa apenas caminhos relativos seguros; dados completos ficam no Data Vault autenticado.",
         },
         "summary": _summary(raw_catalog, raw_columns, outputs, lineage_index, coverage, docs_index),
+        "projectObjectives": project_objectives(),
         "rawFiles": _raw_files(raw_catalog, raw_columns, docs_cache, args.raw_preview_rows),
         "rawColumns": _records(raw_columns),
         "workspaceColumns": _records(workspace_columns),
@@ -143,6 +148,7 @@ def main() -> None:
     }
     if not args.include_private_samples:
         payload = _redact_private_content(payload)
+    payload = _sanitize_public_payload(payload, paths)
     payload["entities"] = _entity_index(payload)
 
     out_path = Path(args.out)
@@ -190,6 +196,76 @@ def _redact_column_record(item: dict[str, Any]) -> dict[str, Any]:
         if key in clean:
             clean[key] = ""
     return clean
+
+
+_PUBLIC_PATH_KEYS = {"path", "file_path", "projectDir", "dataDir", "outputDir", "image_path"}
+_ABSOLUTE_PATH_HINT = re.compile(r"(^|[^A-Za-z])([A-Z]:[\\/](?!/)|\\\\|/(?:home|users|mnt|var|tmp)/)", re.IGNORECASE)
+
+
+def _sanitize_public_payload(payload: Any, paths: Any) -> Any:
+    return _sanitize_public_value(payload, paths, "")
+
+
+def _sanitize_public_value(value: Any, paths: Any, key: str) -> Any:
+    if isinstance(value, dict):
+        return {item_key: _sanitize_public_value(item_value, paths, str(item_key)) for item_key, item_value in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_public_value(item, paths, key) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_public_value(item, paths, key) for item in value]
+    if isinstance(value, Path):
+        return _sanitize_public_string(str(value), paths, key)
+    if isinstance(value, str):
+        return _sanitize_public_string(value, paths, key)
+    return value
+
+
+def _sanitize_public_string(value: str, paths: Any, key: str) -> str:
+    if not value or value.startswith(("http://", "https://", "mailto:")):
+        return value
+    result = value
+    normalized = value.replace("\\", "/")
+    contains_private_hint = bool(_ABSOLUTE_PATH_HINT.search(normalized)) or "users/" in normalized.lower()
+    if contains_private_hint:
+        result = normalized
+        result = _replace_root_path(result, paths.project_dir, ".")
+        result = _replace_root_path(result, paths.data_dir, "data")
+        result = _replace_root_path(result, paths.output_dir, "notebook_outputs/complete_ndvi")
+        result = _replace_marker_tail(result, "/data/", "data/")
+        result = _replace_marker_tail(result, "/notebook_outputs/", "notebook_outputs/")
+        if _ABSOLUTE_PATH_HINT.search(result):
+            if key in _PUBLIC_PATH_KEYS:
+                return _safe_public_basename(result)
+            return re.sub(
+                r"(^|[^A-Za-z])([A-Z]:/[^\"'\n\r]+|/(?:home|users|mnt|var|tmp)/[^\"'\n\r]+)",
+                lambda match: f"{match.group(1)}[private-path-redacted]",
+                result,
+                flags=re.IGNORECASE,
+            )
+    return result
+
+
+def _replace_root_path(value: str, root: Path, public_root: str) -> str:
+    root_text = str(root.resolve()).replace("\\", "/").rstrip("/")
+    if not root_text:
+        return value
+    pattern = re.compile(re.escape(root_text), re.IGNORECASE)
+    return pattern.sub(public_root.rstrip("/"), value)
+
+
+def _replace_marker_tail(value: str, marker: str, public_prefix: str) -> str:
+    lower = value.lower()
+    marker_lower = marker.lower()
+    index = lower.find(marker_lower)
+    if index < 0:
+        return value
+    return public_prefix + value[index + len(marker) :]
+
+
+def _safe_public_basename(value: str) -> str:
+    normalized = value.rstrip("/").replace("\\", "/")
+    name = normalized.rsplit("/", 1)[-1]
+    return name or "private-path-redacted"
 
 
 def _summary(raw_catalog: pd.DataFrame, raw_columns: pd.DataFrame, outputs: dict[str, pd.DataFrame], lineage: pd.DataFrame, coverage: pd.DataFrame, docs_index: pd.DataFrame) -> dict[str, Any]:
@@ -353,7 +429,12 @@ def _build_graph(raw_catalog: pd.DataFrame, raw_columns: pd.DataFrame, outputs: 
 
     for row in raw_catalog.to_dict(orient="records"):
         source_key = str(row.get("source_key", ""))
-        add_node(f"raw-file:{source_key}", "rawFile", source_key, str(row.get("source_group", "")), source_key, json.dumps(row, ensure_ascii=False))
+        safe_search = " ".join(
+            str(row.get(key, ""))
+            for key in ("source_key", "source_group", "description", "kind", "column_names", "temporal_min", "temporal_max")
+            if row.get(key) is not None
+        )
+        add_node(f"raw-file:{source_key}", "rawFile", source_key, str(row.get("source_group", "")), source_key, safe_search)
 
     raw_column_lookup: dict[str, list[str]] = {}
     for row in raw_columns.to_dict(orient="records"):
@@ -480,11 +561,20 @@ def _records(frame: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def _split_cell(value: Any) -> list[str]:
-    if value is None or pd.isna(value):
+    if value is None:
         return []
     if isinstance(value, list):
         return [str(item) for item in value if str(item).strip()]
+    if pd.isna(value):
+        return []
     return [part.strip() for part in str(value).split("|") if part.strip()]
+
+
+def _split_feature_sources(value: Any) -> list[str]:
+    parts: list[str] = []
+    for cell in _split_cell(value):
+        parts.extend(part.strip() for part in re.split(r"\s*(?:\+|,|;|/)\s*", cell) if part.strip())
+    return list(dict.fromkeys(parts))
 
 
 def _jsonable(value: Any) -> Any:
@@ -559,7 +649,12 @@ def _build_graph(raw_catalog: pd.DataFrame, raw_columns: pd.DataFrame, outputs: 
 
     for row in raw_catalog.to_dict(orient="records"):
         source_key = str(row.get("source_key", ""))
-        add_node(f"raw-file:{source_key}", "rawFile", source_key, str(row.get("source_group", "")), source_key, json.dumps(row, ensure_ascii=False))
+        safe_search = " ".join(
+            str(row.get(key, ""))
+            for key in ("source_key", "source_group", "description", "kind", "column_names", "temporal_min", "temporal_max")
+            if row.get(key) is not None
+        )
+        add_node(f"raw-file:{source_key}", "rawFile", source_key, str(row.get("source_group", "")), source_key, safe_search)
 
     raw_column_lookup: dict[str, list[str]] = {}
     for row in raw_columns.to_dict(orient="records"):
@@ -574,6 +669,14 @@ def _build_graph(raw_catalog: pd.DataFrame, raw_columns: pd.DataFrame, outputs: 
         )
         add_node(node_id, "rawColumn", column, source_key, f"{source_key}.{column}", safe_search)
         add_edge(f"raw-file:{source_key}", node_id, "contains_column")
+
+    output_column_lookup: dict[str, list[str]] = {}
+    for csv_name, frame in outputs.items():
+        for column in frame.columns:
+            output_column_lookup.setdefault(str(column), []).append(f"csv-column:{csv_name}:{column}")
+
+    feature_names = set(FEATURE_REGISTRY)
+    pending_output_feature_edges: list[tuple[str, str]] = []
 
     for name, spec in INTERMEDIATE_TABLE_REGISTRY.items():
         add_node(f"intermediate:{name}", "intermediate", name, spec.function, name, spec.description)
@@ -600,6 +703,11 @@ def _build_graph(raw_catalog: pd.DataFrame, raw_columns: pd.DataFrame, outputs: 
                 add_edge(raw_node, f"feature:{name}", "raw_origin")
                 source_key = raw_node.split(":", 2)[1]
                 add_edge(f"raw-file:{source_key}", f"feature:{name}", "raw_origin", confidence="media")
+        for upstream in _split_feature_sources(spec.source_columns):
+            if upstream in feature_names and upstream != name:
+                add_edge(f"feature:{upstream}", f"feature:{name}", "creates_feature", confidence="alta")
+            for csv_col_id in output_column_lookup.get(upstream, []):
+                pending_output_feature_edges.append((csv_col_id, f"feature:{name}"))
 
     for name, doc in DRIVER_DOCUMENTATION.items():
         add_node(f"driver:{name}", "driver", name, getattr(doc, "flag_feature", ""), name, getattr(doc, "definition", ""))
@@ -617,6 +725,9 @@ def _build_graph(raw_catalog: pd.DataFrame, raw_columns: pd.DataFrame, outputs: 
             col_id = f"csv-column:{name}:{column}"
             add_node(col_id, "csvColumn", column, name, f"{name}.{column}", "")
             add_edge(f"csv:{name}", col_id, "contains_column")
+
+    for source, target in pending_output_feature_edges:
+        add_edge(source, target, "lineage", confidence="media")
 
     for name, spec in CSV_REGISTRY.items():
         if name in outputs:
