@@ -114,6 +114,8 @@ O Atlas tem duas superfícies de dados:
 - `atlas-data.json`: público/local, sem conteúdo completo, previews reais ou auditoria linha-a-linha;
 - `/api/private/*`: endpoints locais autenticados para abrir arquivos completos.
 
+O `atlas-data.json` também carrega `projectObjectives`, uma representação estruturada do `info.md` com problema central, objetivos, hipótese principal, perguntas técnicas, riscos de interpretação, plano recomendado, apoio de domínio e links de referência. Caminhos públicos são relativos e seguros; caminhos absolutos locais não devem aparecer no bundle.
+
 O Data Vault permite visualizar:
 
 - CSVs brutos de `data/`;

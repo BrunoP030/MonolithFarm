@@ -241,9 +241,9 @@ Para reconsultar também as páginas oficiais do FarmLab antes de abrir:
 powershell -ExecutionPolicy Bypass -File .\scripts\start_lineage_atlas.ps1 -Port 5173 -RefreshDocs
 ```
 
-O arquivo `lineage_atlas/public/atlas-data.json` é gerado a partir dos metadados reais, registries locais, manifesto de lineage e documentação extraída de `https://farm.labs.unimar.br/docs`.
+O arquivo `lineage_atlas/public/atlas-data.json` é gerado a partir dos metadados reais, objetivos estruturados do `info.md`, registries locais, manifesto de lineage e documentação extraída de `https://farm.labs.unimar.br/docs`.
 
-Por segurança, o JSON público não contém o conteúdo completo dos arquivos, previews reais ou auditoria linha-a-linha. A visualização integral de CSVs brutos, CSVs finais, tabelas intermediárias, arquivos de lineage/auditoria, imagens e documentos ocorre na página `Dados privados`, após login local, por endpoints `/api/private/*` com leitura paginada.
+Por segurança, o JSON público usa apenas caminhos relativos seguros e não contém o conteúdo completo dos arquivos, previews reais, caminhos absolutos locais ou auditoria linha-a-linha. A visualização integral de CSVs brutos, CSVs finais, tabelas intermediárias, arquivos de lineage/auditoria, imagens e documentos ocorre na página `Dados privados`, após login local, por endpoints `/api/private/*` com leitura paginada.
 
 ### Atlas React/TypeScript
 
@@ -268,7 +268,9 @@ Acesse:
 http://127.0.0.1:5173
 ```
 
-A rota recomendada para começar é `Visão geral`. Dali é possível seguir para `Canvas`, `Arquivos`, `Colunas`, `Features`, `Tabelas`, `CSVs finais`, `H1-H4`, `Correlações`, `Auditoria`, `Storytelling` e `Docs FarmLab`. As descrições de colunas brutas são enriquecidas com schemas extraídos de `https://farm.labs.unimar.br/docs`.
+A rota recomendada para começar é `Visão geral`. Dali é possível seguir para `Entenda`, `Objetivos`, `Fluxo dos dados`, `Canvas`, `Arquivos`, `Colunas`, `Features`, `Tabelas`, `CSVs finais`, `H1-H4`, `Correlações`, `Auditoria`, `Storytelling`, `Dados privados` e `Docs FarmLab`. As descrições de colunas brutas são enriquecidas com schemas extraídos de `https://farm.labs.unimar.br/docs`.
+
+Também é possível abrir uma página diretamente com `?page=project`, `?page=objectives` ou `?page=dataflow`, útil para revisão, screenshots e apresentações.
 
 Para gerar o manifesto canonico de rastreabilidade sem abrir a interface:
 
